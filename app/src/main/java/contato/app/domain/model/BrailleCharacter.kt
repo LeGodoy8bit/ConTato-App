@@ -1,4 +1,10 @@
 package contato.app.domain.model
 
-data class BrailleCharacter( val character : Char, val points : List<Boolean>)
+//atributos para cada caractere inserido
+
+data class BrailleCharacter(
+    val character : Char, //somente uma letra
+    val points : List<Boolean>
+
+) //lista dos ponto ativos(true) e inativos (false)
 
