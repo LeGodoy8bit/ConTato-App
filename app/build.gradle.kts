@@ -5,15 +5,15 @@ plugins {
 android {
     namespace = "contato.app"
     compileSdk {
-        version = release(36) {
+        version = release(37) { //O app é compilado usando API 37.1
             minorApiLevel = 1
         }
     }
 
     defaultConfig {
         applicationId = "contato.app"
-        minSdk = 29
-        targetSdk = 36
+        minSdk = 29 //versao minima que vai rodar android 10 (API 29)
+        targetSdk = 36 //o app sera redirecionado testado no android 16 (API 36)
         versionCode = 1
         versionName = "1.0"
 
