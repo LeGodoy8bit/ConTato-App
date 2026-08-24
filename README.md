@@ -1,4 +1,4 @@
-
+## Contato
 Aplicativo Android para comunicação com pessoas com surdocegueira.
 
 ## Documentação
