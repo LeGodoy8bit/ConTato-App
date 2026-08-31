@@ -42,6 +42,8 @@ class HapticController(context: Context) {
             timings.add(HapticConfig.POINT_PAUSE)
             amplitudes.add(0)
 
+        }
+
             val effect = VibrationEffect.createWaveform(
                 timings.toLongArray(),
                 amplitudes.toIntArray(),
@@ -52,6 +54,9 @@ class HapticController(context: Context) {
             vibrator.vibrate(effect)
         }
 
+    fun stop() { //cancela vibração caso ocorra alguma interrupção
+        vibrator.cancel()
     }
 
-}
+    }
+
