@@ -3,28 +3,29 @@ package contato.app.presentation
 import android.app.Activity
 import android.os.Bundle
 import android.widget.Button
-import contato.app.core.vibration.HapticController
-import contato.app.domain.service.HapticMessageService
+import contato.app.core.vibration.HapticMessagePlaybackService
 
 class MainActivity : Activity() {
 
-    private lateinit var hapticController: HapticController
-    private lateinit var hapticMessageService: HapticMessageService
+    private lateinit var hapticPlayback: HapticMessagePlaybackService
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        hapticController = HapticController(this)
-        hapticMessageService = HapticMessageService()
+        hapticPlayback = HapticMessagePlaybackService(this)
 
         val button = Button(this)
         button.text = "Testar vibração"
 
         button.setOnClickListener {
-            val message = hapticMessageService.createMessage("CASA AZUL")
-            hapticController.playMessage(message)
+            hapticPlayback.play("CASA AZUL")
         }
 
         setContentView(button)
+    }
+
+    override fun onPause() {
+        super.onPause()
+        hapticPlayback.stop()
     }
 }

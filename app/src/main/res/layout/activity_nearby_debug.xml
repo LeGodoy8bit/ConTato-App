@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="16dp"
+        android:gravity="center_horizontal">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="TELA DE TESTE - CONEXÃO"
+            android:textSize="20sp"
+            android:textStyle="bold"
+            android:layout_marginTop="32dp"
+            android:layout_marginBottom="24dp" />
+
+        <!-- Botões de Modo -->
+        <Button
+            android:id="@+id/btnGuide"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="INICIAR COMO GUIA (ANUNCIAR)"
+            android:backgroundTint="#4CAF50" />
+
+        <Button
+            android:id="@+id/btnDeafblind"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="INICIAR COMO SURDOCEGO (BUSCAR)"
+            android:backgroundTint="#2196F3"
+            android:layout_marginBottom="16dp" />
+
+        <!-- Status da Conexão -->
+        <TextView
+            android:id="@+id/tvStatus"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Status: Desconectado"
+            android:textColor="#757575"
+            android:layout_marginBottom="24dp" />
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:background="#DDDDDD"
+            android:layout_marginBottom="24dp" />
+
+        <!-- Campo de Texto e Envio -->
+        <EditText
+            android:id="@+id/etMessage"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="Digite o texto de teste aqui"
+            android:inputType="text" />
+
+        <Button
+            android:id="@+id/btnSend"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="ENVIAR MENSAGEM"
+            android:layout_marginTop="8dp" />
+
+        <!-- Área de Recebimento -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Última mensagem recebida:"
+            android:layout_marginTop="32dp"
+            android:textStyle="italic" />
+
+        <TextView
+            android:id="@+id/tvReceivedMessage"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="..."
+            android:textSize="24sp"
+            android:textColor="#000000"
+            android:gravity="center"
+            android:padding="16dp"
+            android:layout_marginTop="8dp"
+            android:background="#F5F5F5" />
+
+        <!-- Espaço extra no fim para garantir a rolagem -->
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="100dp" />
+
+    </LinearLayout>
+</ScrollView>
