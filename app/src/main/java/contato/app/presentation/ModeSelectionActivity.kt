@@ -36,10 +36,10 @@ class ModeSelectionActivity : Activity() {
         setContentView(R.layout.activity_mode_selection)
 
         val rootView = findViewById<View>(R.id.rootModeSelection)
-        val guideButton = findViewById<Button>(R.id.btnSelectGuide)
+        val communicatorButton = findViewById<Button>(R.id.btnSelectCommunicator)
 
-        guideButton.setOnClickListener {
-            selectMode(UserMode.GUIDE)
+        communicatorButton.setOnClickListener {
+            selectMode(UserMode.COMMUNICATOR)
         }
 
         // Toque longo em qualquer ponto da tela seleciona o modo Surdocego.
@@ -69,7 +69,7 @@ class ModeSelectionActivity : Activity() {
         // Destinos temporários — serão substituídos pelas telas reais
         // (chat do Interlocutor / entrada gestual do Surdocego) em etapas futuras.
         val destination = when (mode) {
-            UserMode.GUIDE -> NearbyDebugActivity::class.java
+            UserMode.COMMUNICATOR -> NearbyDebugActivity::class.java
             UserMode.DEAFBLIND -> MainActivity::class.java
         }
 

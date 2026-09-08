@@ -2,6 +2,6 @@ package contato.app.domain.model
 
 enum class UserMode {
 
-    GUIDE,      // Interlocutor
+    COMMUNICATOR,      // Interlocutor
     DEAFBLIND   // Surdocego
 }

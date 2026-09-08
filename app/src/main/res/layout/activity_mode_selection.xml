@@ -29,7 +29,7 @@
             android:layout_marginBottom="32dp" />
 
         <Button
-            android:id="@+id/btnSelectGuide"
+            android:id="@+id/btnSelectCommunicator"
             android:layout_width="wrap_content"
             android:layout_height="80dp"
             android:minWidth="240dp"
