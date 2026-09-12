@@ -13,6 +13,7 @@ import contato.app.R
 import contato.app.core.connection.NearbyConnectionService
 import contato.app.core.connection.NearbyListener
 import contato.app.core.vibration.HapticMessagePlaybackService
+import contato.app.domain.state.ConnectionState
 
 /**
  * Tela de teste manual para a comunicação P2P via Nearby Connections.
@@ -74,6 +75,13 @@ class NearbyDebugActivity : AppCompatActivity(), NearbyListener {
     override fun onConnectionStatusChanged(status: String) {
         runOnUiThread {
             tvStatus.text = "Status: $status"
+        }
+    }
+
+
+    override fun onConnectionStateChanged(state: ConnectionState) {
+        runOnUiThread {
+            tvStatus.text = "Estado: $state"
         }
     }
 

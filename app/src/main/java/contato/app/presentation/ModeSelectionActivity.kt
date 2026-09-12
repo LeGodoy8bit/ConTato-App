@@ -70,7 +70,7 @@ class ModeSelectionActivity : Activity() {
         // (chat do Interlocutor / entrada gestual do Surdocego) em etapas futuras.
         val destination = when (mode) {
             UserMode.COMMUNICATOR -> NearbyDebugActivity::class.java
-            UserMode.DEAFBLIND -> MainActivity::class.java
+            UserMode.DEAFBLIND -> NearbyDebugActivity::class.java
         }
 
         startActivity(Intent(this, destination))

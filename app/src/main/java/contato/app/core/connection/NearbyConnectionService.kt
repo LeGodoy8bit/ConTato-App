@@ -15,16 +15,14 @@ import com.google.android.gms.nearby.connection.EndpointDiscoveryCallback
 import com.google.android.gms.nearby.connection.Payload
 import com.google.android.gms.nearby.connection.PayloadCallback
 import com.google.android.gms.nearby.connection.PayloadTransferUpdate
+import contato.app.domain.state.ConnectionState
+import contato.app.domain.state.ConnectionStateMachine
 
 interface NearbyListener {
     fun onMessageReceived(message: String)
     fun onConnectionStatusChanged(status: String)
+    fun onConnectionStateChanged(state: ConnectionState)
 }
-
-/**
- * Encapsula a comunicação P2P entre o celular do Guia (interlocutor) e o
- * celular da pessoa Surdocega, usando Nearby Connections (Google Play Services).
- */
 
 class NearbyConnectionService(
     private val context: Context,
@@ -33,18 +31,24 @@ class NearbyConnectionService(
 
     private val connectionsClient: ConnectionsClient = Nearby.getConnectionsClient(context)
 
-    // Identifica o app para não conectar acidentalmente com outros apps Nearby por perto
     private val serviceId = "contato.app.BRAILLE"
-
-    // P2P_POINT_TO_POINT: conexão direta de um único par de dispositivos (Guia <-> Surdocego)
     private val strategy = Strategy.P2P_POINT_TO_POINT
 
     private var connectedEndpointId: String? = null
 
+    // Máquina de estados formal, seguindo os estados definidos na especificação.
+    private val stateMachine = ConnectionStateMachine()
+
+    init {
+        stateMachine.setOnStateChangedListener { newState ->
+            listener.onConnectionStateChanged(newState)
+        }
+    }
+
     private val connectionLifecycleCallback = object : ConnectionLifecycleCallback() {
 
         override fun onConnectionInitiated(endpointId: String, info: ConnectionInfo) {
-            // Aceita a conexão automaticamente, sem exigir confirmação manual do usuário
+            stateMachine.transitionTo(ConnectionState.CONNECTING)
             connectionsClient.acceptConnection(endpointId, payloadCallback)
         }
 
@@ -52,12 +56,15 @@ class NearbyConnectionService(
             when (result.status.statusCode) {
                 ConnectionsStatusCodes.STATUS_OK -> {
                     connectedEndpointId = endpointId
+                    stateMachine.transitionTo(ConnectionState.CONNECTED)
                     listener.onConnectionStatusChanged("Conectado com: $endpointId")
                 }
                 ConnectionsStatusCodes.STATUS_CONNECTION_REJECTED -> {
+                    stateMachine.transitionTo(ConnectionState.CONNECTION_ERROR)
                     listener.onConnectionStatusChanged("Conexão Rejeitada")
                 }
                 ConnectionsStatusCodes.STATUS_ERROR -> {
+                    stateMachine.transitionTo(ConnectionState.CONNECTION_ERROR)
                     listener.onConnectionStatusChanged("Erro na Conexão")
                 }
             }
@@ -65,6 +72,7 @@ class NearbyConnectionService(
 
         override fun onDisconnected(endpointId: String) {
             connectedEndpointId = null
+            stateMachine.transitionTo(ConnectionState.DISCONNECTED)
             listener.onConnectionStatusChanged("Desconectado")
         }
     }
@@ -72,6 +80,8 @@ class NearbyConnectionService(
     private val endpointDiscoveryCallback = object : EndpointDiscoveryCallback() {
 
         override fun onEndpointFound(endpointId: String, info: DiscoveredEndpointInfo) {
+            stateMachine.transitionTo(ConnectionState.DEVICE_FOUND)
+
             connectionsClient.requestConnection(
                 "Usuário Surdocego",
                 endpointId,
@@ -100,6 +110,8 @@ class NearbyConnectionService(
     }
 
     fun startAdvertising(userName: String) {
+        stateMachine.transitionTo(ConnectionState.SCANNING)
+
         val advertisingOptions = AdvertisingOptions.Builder().setStrategy(strategy).build()
 
         connectionsClient.startAdvertising(userName, serviceId, connectionLifecycleCallback, advertisingOptions)
@@ -107,11 +119,14 @@ class NearbyConnectionService(
                 listener.onConnectionStatusChanged("Anunciando com sucesso!")
             }
             .addOnFailureListener { e ->
+                stateMachine.transitionTo(ConnectionState.CONNECTION_ERROR)
                 listener.onConnectionStatusChanged("ERRO ao anunciar: ${e.message}")
             }
     }
 
     fun startDiscovery() {
+        stateMachine.transitionTo(ConnectionState.SCANNING)
+
         val discoveryOptions = DiscoveryOptions.Builder().setStrategy(strategy).build()
 
         connectionsClient.startDiscovery(serviceId, endpointDiscoveryCallback, discoveryOptions)
@@ -119,6 +134,7 @@ class NearbyConnectionService(
                 listener.onConnectionStatusChanged("Procurando com sucesso!")
             }
             .addOnFailureListener { e ->
+                stateMachine.transitionTo(ConnectionState.CONNECTION_ERROR)
                 listener.onConnectionStatusChanged("ERRO ao procurar: ${e.message}")
             }
     }
@@ -131,11 +147,11 @@ class NearbyConnectionService(
         }
     }
 
-    /** Encerra advertising, discovery e conexões ativas. Chamar em onPause/onDestroy. */
     fun stop() {
         connectionsClient.stopAdvertising()
         connectionsClient.stopDiscovery()
         connectionsClient.stopAllEndpoints()
         connectedEndpointId = null
+        stateMachine.transitionTo(ConnectionState.DISCONNECTED)
     }
 }
