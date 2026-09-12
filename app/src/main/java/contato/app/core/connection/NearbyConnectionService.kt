@@ -110,6 +110,8 @@ class NearbyConnectionService(
     }
 
     fun startAdvertising(userName: String) {
+        if (isSearchingOrConnected()) return
+
         stateMachine.transitionTo(ConnectionState.SCANNING)
 
         val advertisingOptions = AdvertisingOptions.Builder().setStrategy(strategy).build()
@@ -125,6 +127,8 @@ class NearbyConnectionService(
     }
 
     fun startDiscovery() {
+        if (isSearchingOrConnected()) return
+
         stateMachine.transitionTo(ConnectionState.SCANNING)
 
         val discoveryOptions = DiscoveryOptions.Builder().setStrategy(strategy).build()
@@ -137,6 +141,21 @@ class NearbyConnectionService(
                 stateMachine.transitionTo(ConnectionState.CONNECTION_ERROR)
                 listener.onConnectionStatusChanged("ERRO ao procurar: ${e.message}")
             }
+    }
+
+    /**
+     * Evita chamadas duplicadas de startAdvertising/startDiscovery, que o Nearby
+     * rejeita com STATUS_ALREADY_ADVERTISING (8001) ou STATUS_ALREADY_DISCOVERING
+     * (8002). Sem esta guarda, uma segunda chamada durante uma busca/anúncio já
+     * em andamento fazia a máquina de estados transicionar incorretamente para
+     * CONNECTION_ERROR, mesmo com a operação original continuando ativa.
+     */
+    private fun isSearchingOrConnected(): Boolean {
+        val currentState = stateMachine.currentState
+        return currentState == ConnectionState.SCANNING ||
+                currentState == ConnectionState.DEVICE_FOUND ||
+                currentState == ConnectionState.CONNECTING ||
+                currentState == ConnectionState.CONNECTED
     }
 
     fun sendMessage(message: String) {
