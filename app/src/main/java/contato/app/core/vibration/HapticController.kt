@@ -6,12 +6,18 @@ import android.os.Vibrator
 import android.os.VibratorManager
 import contato.app.domain.model.HapticMessage
 import contato.app.domain.model.HapticPattern
+import contato.app.domain.model.HapticPulse
 import contato.app.domain.service.HapticWaveformBuilder
+import contato.app.domain.service.SystemHapticWaveformBuilder
 
 class HapticController(context: Context) {
 
     private val vibrator: Vibrator
     private val waveformBuilder = HapticWaveformBuilder()
+    private val systemWaveformBuilder = SystemHapticWaveformBuilder()
+
+
+
 
     init {
         vibrator =
@@ -26,6 +32,7 @@ class HapticController(context: Context) {
             }
     }
 
+
     fun play(pattern: HapticPattern) {
         val waveform = waveformBuilder.buildCharacterWaveform(pattern)
         vibrate(waveform.timings, waveform.amplitudes)
@@ -33,6 +40,16 @@ class HapticController(context: Context) {
 
     fun playMessage(message: HapticMessage) {
         val waveform = waveformBuilder.buildMessageWaveform(message)
+        vibrate(waveform.timings, waveform.amplitudes)
+    }
+
+
+    /**
+     * Reproduz um padrão de vibração de sistema (ver [SystemHapticPatterns]),
+     * independente do pipeline de mensagens Braille.
+     */
+    fun playSystemFeedback(pulses: List<HapticPulse>) {
+        val waveform = systemWaveformBuilder.buildSystemWaveform(pulses)
         vibrate(waveform.timings, waveform.amplitudes)
     }
 
