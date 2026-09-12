@@ -41,6 +41,7 @@
         <activity
             android:name=".presentation.ModeSelectionActivity"
             android:exported="true">
+
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -55,6 +56,11 @@
         <activity
             android:name=".presentation.MainActivity"
             android:exported="false" />
+
+        <activity
+            android:name=".presentation.DeafblindActivity"
+            android:exported="false" />
+
 
     </application>
 

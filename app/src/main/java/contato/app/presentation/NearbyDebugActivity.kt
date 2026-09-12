@@ -1,7 +1,5 @@
 package contato.app.presentation
 
-import android.Manifest
-import android.os.Build
 import android.os.Bundle
 import android.widget.Button
 import android.widget.EditText
@@ -12,6 +10,7 @@ import androidx.core.app.ActivityCompat
 import contato.app.R
 import contato.app.core.connection.NearbyConnectionService
 import contato.app.core.connection.NearbyListener
+import contato.app.core.connection.NearbyPermissions
 import contato.app.core.vibration.HapticMessagePlaybackService
 import contato.app.domain.service.ConnectionFeedbackMapper
 import contato.app.domain.service.SystemHapticPatterns
@@ -44,7 +43,8 @@ class NearbyDebugActivity : AppCompatActivity(), NearbyListener {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_nearby_debug)
-        checkPermissions()
+
+        ActivityCompat.requestPermissions(this, NearbyPermissions.getRequiredPermissions(), 1)
 
         nearbyService = NearbyConnectionService(this, this)
         hapticPlayback = HapticMessagePlaybackService(this)
@@ -127,30 +127,5 @@ class NearbyDebugActivity : AppCompatActivity(), NearbyListener {
         super.onPause()
         hapticPlayback.stop()
         nearbyService.stop()
-    }
-
-    /**
-     * Solicita as permissões necessárias para o Nearby Connections funcionar,
-     * variando conforme a versão do Android instalada no aparelho.
-     */
-    private fun checkPermissions() {
-        val permissions = mutableListOf(
-            Manifest.permission.ACCESS_FINE_LOCATION,
-            Manifest.permission.ACCESS_COARSE_LOCATION
-        )
-
-        // Android 12+ exige permissões de Bluetooth mais granulares.
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            permissions.add(Manifest.permission.BLUETOOTH_SCAN)
-            permissions.add(Manifest.permission.BLUETOOTH_ADVERTISE)
-            permissions.add(Manifest.permission.BLUETOOTH_CONNECT)
-        }
-
-        // Android 13+ exige permissão específica para descoberta via Wi-Fi.
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            permissions.add(Manifest.permission.NEARBY_WIFI_DEVICES)
-        }
-
-        ActivityCompat.requestPermissions(this, permissions.toTypedArray(), 1)
     }
 }

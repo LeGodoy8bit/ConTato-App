@@ -66,11 +66,9 @@ class ModeSelectionActivity : Activity() {
     }
 
     private fun navigateToMode(mode: UserMode) {
-        // Destinos temporários — serão substituídos pelas telas reais
-        // (chat do Interlocutor / entrada gestual do Surdocego) em etapas futuras.
         val destination = when (mode) {
-            UserMode.COMMUNICATOR -> NearbyDebugActivity::class.java
-            UserMode.DEAFBLIND -> NearbyDebugActivity::class.java
+            UserMode.COMMUNICATOR -> NearbyDebugActivity::class.java   // provisório até criarmos a tela real do Comunicador
+            UserMode.DEAFBLIND -> DeafblindActivity::class.java        // tela real do Surdocego
         }
 
         startActivity(Intent(this, destination))
