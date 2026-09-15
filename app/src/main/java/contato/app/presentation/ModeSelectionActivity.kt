@@ -67,7 +67,7 @@ class ModeSelectionActivity : Activity() {
 
     private fun navigateToMode(mode: UserMode) {
         val destination = when (mode) {
-            UserMode.COMMUNICATOR -> NearbyDebugActivity::class.java   // provisório até criarmos a tela real do Comunicador
+            UserMode.COMMUNICATOR -> CommunicatorActivity::class.java    // provisório até criarmos a tela real do Comunicador
             UserMode.DEAFBLIND -> DeafblindActivity::class.java        // tela real do Surdocego
         }
 

@@ -61,6 +61,10 @@
             android:name=".presentation.DeafblindActivity"
             android:exported="false" />
 
+        <activity
+            android:name=".presentation.CommunicatorActivity"
+            android:windowSoftInputMode="adjustResize" />
+
 
     </application>
 

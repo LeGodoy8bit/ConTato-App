@@ -74,4 +74,17 @@ class ConnectionStateMachineTest {
 
         assertEquals(null, notifiedState)
     }
+
+    @Test
+    fun `deve permitir ir direto de SCANNING para CONNECTING (papel de quem anuncia)`() {
+        val machine = ConnectionStateMachine()
+
+        machine.transitionTo(ConnectionState.SCANNING)
+        val result = machine.transitionTo(ConnectionState.CONNECTING)
+
+        assertTrue(result)
+        assertEquals(ConnectionState.CONNECTING, machine.currentState)
+    }
 }
+
+

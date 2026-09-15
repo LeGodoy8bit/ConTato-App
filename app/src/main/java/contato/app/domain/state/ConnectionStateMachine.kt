@@ -8,8 +8,24 @@ package contato.app.domain.state
  * está desconectado). Qualquer tentativa de transição fora das regras
  * definidas em [validTransitions] é ignorada silenciosamente e não
  * altera o estado atual.
+ *
+ * IMPORTANTE — assimetria entre papéis: esta máquina é compartilhada
+ * pelos dois papéis do Nearby Connections (quem anuncia e quem busca),
+ * que percorrem caminhos ligeiramente diferentes:
+ *
+ * - Quem BUSCA (ex.: Surdocego, via startDiscovery): passa por
+ *   SCANNING -> DEVICE_FOUND -> CONNECTING -> CONNECTED, pois recebe
+ *   o callback onEndpointFound antes de solicitar a conexão.
+ * - Quem ANUNCIA (ex.: Comunicador, via startAdvertising): vai direto
+ *   de SCANNING -> CONNECTING -> CONNECTED, pois recebe apenas
+ *   onConnectionInitiated, sem nunca passar por DEVICE_FOUND (esse
+ *   conceito só existe do lado de quem descobre ativamente o outro).
+ *
+ * Por isso DEVICE_FOUND é tratado como um estado intermediário
+ * OPCIONAL: CONNECTING é alcançável tanto a partir de SCANNING quanto
+ * de DEVICE_FOUND, cobrindo os dois papéis sem duplicar a máquina de
+ * estados nem criar um conjunto de estados separado para cada um.
  */
-
 class ConnectionStateMachine(
     initialState: ConnectionState = ConnectionState.DISCONNECTED
 ) {
@@ -25,7 +41,8 @@ class ConnectionStateMachine(
             ConnectionState.CONNECTING
         ),
         ConnectionState.SCANNING to setOf(
-            ConnectionState.DEVICE_FOUND,
+            ConnectionState.DEVICE_FOUND,  // caminho de quem busca
+            ConnectionState.CONNECTING,    // caminho de quem anuncia
             ConnectionState.DISCONNECTED
         ),
         ConnectionState.DEVICE_FOUND to setOf(

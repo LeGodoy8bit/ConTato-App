@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Define a cor de fundo do botão de enviar de acordo com o estado dele:
+    - Quando DESABILITADO (sem conexão ainda): cinza
+    - Quando HABILITADO (conectado, pronto pra enviar): azul
+    O Android troca a cor sozinho quando o código muda buttonSend.isEnabled.
+-->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:state_enabled="false">
+        <shape android:shape="rectangle">
+            <solid android:color="#9E9E9E" />
+            <corners android:radius="8dp" />
+        </shape>
+    </item>
+    <item android:state_enabled="true">
+        <shape android:shape="rectangle">
+            <solid android:color="#1976D2" />
+            <corners android:radius="8dp" />
+        </shape>
+    </item>
+</selector>
