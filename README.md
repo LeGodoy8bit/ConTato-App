@@ -13,15 +13,15 @@ uma mudança de arquitetura sem atualização aqui é considerada incompleta.
 1. [Arquitetura](docs/01-arquitetura.md) — camadas, estrutura de pastas, e as
    principais decisões técnicas (Nearby Connections vs. BLE, nomenclatura,
    convenções de código).
-2. [Pipeline Braille → Háptico](02-pipeline-braille-haptico.md) — como uma
+2. [Pipeline Braille → Háptico](docs/02-pipeline-braille-haptico.md) — como uma
    letra vira vibração, do `BrailleMapper` ao `HapticController`.
-3. [Comunicação e Máquinas de Estado](03-comunicacao-e-estados.md) — como
+3. [Comunicação e Máquinas de Estado](docs/03-comunicacao-e-estados.md) — como
    os dois dispositivos se conectam via Nearby Connections, e as três
    máquinas de estado que governam conexão, conversa e o ciclo do
    Surdocego.
-4. [Telas e Fluxos de Usuário](04-telas-e-fluxos.md) — o que cada Activity
+4. [Telas e Fluxos de Usuário](docs/04-telas-e-fluxos.md) — o que cada Activity
    faz, para quem, e como as telas se conectam.
-5. [Pendências e Trabalhos Futuros](05-pendencias-e-trabalhos-futuros.md)
+5. [Pendências e Trabalhos Futuros](docs/05-pendencias-e-trabalhos-futuros.md)
    — dívidas técnicas conhecidas, decisões adiadas de propósito, e
    possibilidades de pesquisa citáveis no TCC.
 
