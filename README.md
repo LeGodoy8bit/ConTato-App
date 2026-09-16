@@ -10,7 +10,7 @@ uma mudança de arquitetura sem atualização aqui é considerada incompleta.
 
 ## Índice
 
-1. [Arquitetura](01-arquitetura.md) — camadas, estrutura de pastas, e as
+1. [Arquitetura](docs/01-arquitetura.md) — camadas, estrutura de pastas, e as
    principais decisões técnicas (Nearby Connections vs. BLE, nomenclatura,
    convenções de código).
 2. [Pipeline Braille → Háptico](02-pipeline-braille-haptico.md) — como uma
