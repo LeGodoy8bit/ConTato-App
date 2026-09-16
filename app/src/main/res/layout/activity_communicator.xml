@@ -55,6 +55,16 @@
             android:background="@drawable/button_send_background"
             android:enabled="false" />
 
+        <Button
+            android:id="@+id/buttonReconnect"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="end"
+            android:layout_margin="8dp"
+            android:text="Reconectar" />
+
+
+
     </LinearLayout>
 
 </LinearLayout>

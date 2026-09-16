@@ -88,6 +88,12 @@ object SystemHapticPatterns {
             // transmissão ou reprodução da mensagem.
             SystemFeedbackEvent.MESSAGE_FINISHED ->
                 listOf(HapticPulse(long, normal))
+
+
+            // Uma vibração curta indica que um comando de edição
+            // (apagar, espaço, confirmar) foi reconhecido.
+            SystemFeedbackEvent.COMMAND_RECOGNIZED ->
+                listOf(HapticPulse(short, normal))
         }
     }
 }

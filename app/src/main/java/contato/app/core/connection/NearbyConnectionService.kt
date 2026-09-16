@@ -173,4 +173,6 @@ class NearbyConnectionService(
         connectedEndpointId = null
         stateMachine.transitionTo(ConnectionState.DISCONNECTED)
     }
+    fun getCurrentState(): ConnectionState = stateMachine.currentState
+
 }

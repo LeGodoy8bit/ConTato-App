@@ -48,6 +48,8 @@ class CommunicatorActivity : Activity(), NearbyListener {
     private lateinit var recyclerMessages: RecyclerView
     private lateinit var editMessageInput: EditText
     private lateinit var buttonSend: Button
+    private lateinit var buttonReconnect: Button
+
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -72,6 +74,17 @@ class CommunicatorActivity : Activity(), NearbyListener {
         }
 
         pedirPermissoesENecessarias()
+
+
+
+// dentro do onCreate, junto aos outros findViewById:
+        buttonReconnect = findViewById(R.id.buttonReconnect)
+
+        buttonReconnect.setOnClickListener {
+            if (nearbyService.getCurrentState() == ConnectionState.DISCONNECTED) {
+                nearbyService.startAdvertising("Comunicador")
+            }
+        }
     }
 
     /**
@@ -203,4 +216,8 @@ class CommunicatorActivity : Activity(), NearbyListener {
         android.util.Log.d("ConTato", "Botão enviar habilitado? ${buttonSend.isEnabled}")
 
     }
+
+
+
+
 }

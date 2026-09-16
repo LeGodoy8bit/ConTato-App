@@ -19,6 +19,9 @@ enum class SystemFeedbackEvent {
     CONNECTION_FAILED, //A tentativa de conexão falhou
     MESSAGE_SENT, //Uma mensagem foi enviada
     MESSAGE_FINISHED, //A reprodução/transmissão da mensagem terminou
-    ERROR //Ocorreu algum erro no sistema
+    ERROR, //Ocorreu algum erro no sistema
+
+    COMMAND_RECOGNIZED // seção 3.9: cada comando (apagar, espaço, confirmar) precisa de feedback próprio
+
 
 }
