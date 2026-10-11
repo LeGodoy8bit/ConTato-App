@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:fillViewport="true"
+    android:background="#FFFFFF">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="16dp">
+
+        <TextView
+            android:id="@+id/tvDebugStatus"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:padding="16dp"
+            android:text="Aguardando conexão..."
+            android:textSize="16sp" />
+
+        <TextView
+            android:id="@+id/tvComposedMessage"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:padding="8dp"
+            android:textSize="20sp"
+            android:textStyle="bold"
+            android:text="" />
+
+        <!-- Célula Braille: 6 pontos em 2 colunas x 3 linhas (P1 P4 / P2 P5 / P3 P6) -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center"
+            android:layout_marginTop="16dp">
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+
+                <Button android:id="@+id/btnPoint1" style="@style/BraillePointButton" android:text="P1" />
+                <Button android:id="@+id/btnPoint2" style="@style/BraillePointButton" android:text="P2" />
+                <Button android:id="@+id/btnPoint3" style="@style/BraillePointButton" android:text="P3" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+
+                <Button android:id="@+id/btnPoint4" style="@style/BraillePointButton" android:text="P4" />
+                <Button android:id="@+id/btnPoint5" style="@style/BraillePointButton" android:text="P5" />
+                <Button android:id="@+id/btnPoint6" style="@style/BraillePointButton" android:text="P6" />
+            </LinearLayout>
+
+        </LinearLayout>
+
+        <!-- Área de comandos: independente dos 6 pontos -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginTop="24dp">
+
+            <Button
+                android:id="@+id/btnDelete"
+                android:layout_width="0dp"
+                android:layout_height="72dp"
+                android:layout_weight="1"
+                android:layout_margin="4dp"
+                android:text="Apagar" />
+
+            <Button
+                android:id="@+id/btnSpace"
+                android:layout_width="0dp"
+                android:layout_height="72dp"
+                android:layout_weight="1"
+                android:layout_margin="4dp"
+                android:text="Espaço" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/btnConfirm"
+                android:layout_width="0dp"
+                android:layout_height="72dp"
+                android:layout_weight="1"
+                android:layout_margin="4dp"
+                android:text="Confirmar" />
+
+            <Button
+                android:id="@+id/btnSendMessage"
+                android:layout_width="0dp"
+                android:layout_height="72dp"
+                android:layout_weight="1"
+                android:layout_margin="4dp"
+                android:text="Enviar" />
+        </LinearLayout>
+
+    </LinearLayout>
+</ScrollView>

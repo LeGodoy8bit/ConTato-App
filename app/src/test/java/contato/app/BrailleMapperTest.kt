@@ -44,6 +44,22 @@ class BrailleMapperTest {
         }
     }
 
+    @Test
+    fun `deve fazer o mapeamento inverso de pontos para o caractere C`() {
+        val pontos = listOf(true, false, false, true, false, false)
+        val resultado = BrailleMapper.reverseMap(pontos)
+
+        assertEquals('C', resultado)
+    }
+
+    @Test
+    fun `deve retornar null para um padrao de pontos nao mapeado`() {
+        val pontosInvalidos = listOf(true, true, true, true, true, true)
+        val resultado = BrailleMapper.reverseMap(pontosInvalidos)
+
+        assertEquals(null, resultado)
+    }
+
 
 }
 

@@ -46,4 +46,21 @@ object BrailleMapper {
 
     }
 
+    /**
+     * Caminho inverso do mapeamento: dado um padrão de pontos pressionados
+     * na célula Braille virtual, retorna o caractere correspondente.
+     *
+     * Usado pela composição de mensagens do Surdocego (seção 3.8 da
+     * especificação): o usuário pressiona os pontos, e o sistema precisa
+     * descobrir qual letra isso representa — o oposto do que `map()` faz.
+     *
+     * @param points os 6 pontos pressionados, na ordem P1..P6.
+     * @return o caractere correspondente, ou null se o padrão não
+     *         corresponder a nenhum caractere conhecido.
+     */
+    fun reverseMap(points: List<Boolean>): Char? {
+        return brailleTable.entries.find { it.value == points }?.key
+    }
+
+
 }
