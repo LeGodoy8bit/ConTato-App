@@ -31,6 +31,7 @@ class DeafblindModeStateMachine(
         ),
         DeafblindModeState.WAITING_MESSAGE to setOf(
             DeafblindModeState.RECEIVING_MESSAGE,
+            DeafblindModeState.REPEATING_MESSAGE, // repetir pode ser pedido a qualquer momento em espera
             DeafblindModeState.SEARCHING
         ),
         DeafblindModeState.RECEIVING_MESSAGE to setOf(
