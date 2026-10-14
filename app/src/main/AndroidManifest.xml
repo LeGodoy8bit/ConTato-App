@@ -2,30 +2,41 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- Permissão para utilizar o motor de vibração do dispositivo -->
+    <!-- Permissão para utilizar a vibração do dispositivo -->
     <uses-permission android:name="android.permission.VIBRATE" />
 
-    <!-- Permissões antigas de Bluetooth (necessárias para Android menor que o 12) -->
-    <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
-    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
+    <!-- Permissões Bluetooth para Android 11 ou inferior -->
+    <uses-permission
+        android:name="android.permission.BLUETOOTH"
+        android:maxSdkVersion="30" />
 
-    <!-- Localização: exigida pelo Android para descoberta de dispositivos via Bluetooth/Wi-Fi -->
+    <uses-permission
+        android:name="android.permission.BLUETOOTH_ADMIN"
+        android:maxSdkVersion="30" />
+
+    <!-- Permissões de localização utilizadas por versões antigas do Android -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 
-    <!-- Wi-Fi e Internet, exigidas pelo Nearby Connections -->
+    <!-- Permissões de rede -->
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
-    <!-- Wi-Fi para Android 13+ -->
-    <uses-permission android:name="android.permission.NEARBY_WIFI_DEVICES" />
+    <!-- Permissão para descoberta de dispositivos Wi-Fi próximos -->
+    <uses-permission
+        android:name="android.permission.NEARBY_WIFI_DEVICES"
+        android:usesPermissionFlags="neverForLocation"
+        tools:targetApi="33" />
 
-    <!-- Bluetooth novo (Android 12+) -->
-    <uses-permission android:name="android.permission.BLUETOOTH_SCAN"
+    <!-- Permissões Bluetooth para Android 12 ou superior -->
+    <uses-permission
+        android:name="android.permission.BLUETOOTH_SCAN"
         android:usesPermissionFlags="neverForLocation" />
+
     <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" />
+
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
 
     <application
@@ -38,33 +49,39 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.ConTatoApp">
 
+        <!-- Tela inicial do aplicativo: apresenta a Splash Screen -->
         <activity
-            android:name=".presentation.ModeSelectionActivity"
+            android:name=".presentation.debug.VibrationDebugActivity"
             android:exported="true">
 
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+
         </activity>
 
+        <!-- Tela de seleção do modo de comunicação -->
         <activity
-            android:name=".presentation.NearbyDebugActivity"
+            android:name=".presentation.ModeSelectionActivity"
+            android:exported="false" />
+
+        <!-- Tela de depuração da conexão entre dispositivos -->
+        <activity
+            android:name=".presentation.debug.NearbyDebugActivity"
             android:exported="false"
             android:theme="@style/Theme.MaterialComponents.DayNight.NoActionBar" />
 
-        <activity
-            android:name=".presentation.MainActivity"
-            android:exported="false" />
-
+        <!-- Tela de comunicação da pessoa com surdocegueira -->
         <activity
             android:name=".presentation.DeafblindActivity"
             android:exported="false" />
 
+        <!-- Tela do interlocutor -->
         <activity
             android:name=".presentation.CommunicatorActivity"
+            android:exported="false"
             android:windowSoftInputMode="adjustResize" />
-
 
     </application>
 

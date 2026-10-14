@@ -1,4 +1,4 @@
-package contato.app.presentation
+package contato.app.presentation.debug
 
 import android.os.Bundle
 import android.widget.Button
