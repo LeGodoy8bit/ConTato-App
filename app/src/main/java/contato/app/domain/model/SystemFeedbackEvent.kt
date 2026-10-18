@@ -20,8 +20,9 @@ enum class SystemFeedbackEvent {
     MESSAGE_SENT, //Uma mensagem foi enviada
     MESSAGE_FINISHED, //A reprodução/transmissão da mensagem terminou
     ERROR, //Ocorreu algum erro no sistema
-
-    COMMAND_RECOGNIZED // seção 3.9: cada comando (apagar, espaço, confirmar) precisa de feedback próprio
+    COMMAND_RECOGNIZED, // seção 3.9: cada comando (apagar, espaço, confirmar) precisa de feedback próprio
+    SPLASH_TYPING_TICK,
+    SPLASH_SYMBOL_FORMED
 
 
 }

@@ -94,6 +94,18 @@ object SystemHapticPatterns {
             // (apagar, espaço, confirmar) foi reconhecido.
             SystemFeedbackEvent.COMMAND_RECOGNIZED ->
                 listOf(HapticPulse(short, normal))
+
+
+            // Toque muito curto e leve a cada letra digitada ou apagada na
+            // splash. Mais curto que qualquer padrão de conexão, para não
+            // ser confundido com eles.
+            SystemFeedbackEvent.SPLASH_TYPING_TICK ->
+                listOf(HapticPulse(HapticConfig.SPLASH_TICK_DURATION, HapticConfig.SPLASH_TICK_AMPLITUDE))
+
+            // Um pulso firme quando o símbolo termina de se formar.
+            SystemFeedbackEvent.SPLASH_SYMBOL_FORMED ->
+                listOf(HapticPulse(HapticConfig.SPLASH_FORMED_DURATION, strong))
+
         }
     }
 }

@@ -34,4 +34,11 @@ object HapticConfig {
     const val SYSTEM_STRONG_AMPLITUDE = 255
 
 
+    // VIBRAÇÃO DA SPLASH (toque por letra e pulso final)
+    const val SPLASH_TICK_DURATION = 15L
+    const val SPLASH_TICK_AMPLITUDE = 60
+    const val SPLASH_FORMED_DURATION = 250L
+
+
+
 }
