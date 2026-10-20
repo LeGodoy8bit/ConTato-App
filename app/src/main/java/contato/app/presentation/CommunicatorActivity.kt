@@ -1,223 +1,81 @@
 package contato.app.presentation
 
-import android.app.Activity
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Bundle
-import android.widget.Button
-import android.widget.EditText
-import android.widget.TextView
-import androidx.recyclerview.widget.LinearLayoutManager
-import androidx.recyclerview.widget.RecyclerView
-import contato.app.R
-import contato.app.core.connection.NearbyConnectionService
-import contato.app.core.connection.NearbyListener
+import android.provider.Settings
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.core.content.ContextCompat
 import contato.app.core.connection.NearbyPermissions
-import contato.app.data.InMemoryConversationHistoryRepository
-import contato.app.domain.model.Message
-import contato.app.domain.model.MessageStatus
-import contato.app.domain.model.UserMode
-import contato.app.domain.state.ConnectionState
-import contato.app.domain.state.ConversationState
-import contato.app.domain.state.ConversationStateMachine
-import java.util.UUID
+import contato.app.data.CommunicatorProfilePreferencesRepository
+import contato.app.data.PreferencesConversationArchive
+import contato.app.presentation.communicator.CommunicatorApp
+import contato.app.presentation.communicator.CommunicatorSession
+import contato.app.presentation.theme.ContatoTheme
 
 /**
- * Tela real do Comunicador: permite digitar e enviar mensagens ao
- * Surdocego, e exibe o histórico da conversa (enviadas e recebidas).
+ * Tela do Comunicador, agora em Compose (substitui activity_communicator.xml + MessageAdapter).
  *
- * Implementa NearbyListener para reagir a três tipos de evento vindos
- * da camada de conexão: mensagem recebida, mudança de status "textual"
- * (para debug/feedback simples) e mudança de estado formal da conexão
- * (usado para habilitar/desabilitar o botão de enviar).
+ * Fluxo: permissões -> conexão (busca automática) -> conversa / perfil.
+ * Toda a lógica fica em CommunicatorSession; esta Activity só cria a sessão,
+ * desenha a interface e encerra a conexão no fim.
  */
-class CommunicatorActivity : Activity(), NearbyListener {
+class CommunicatorActivity : ComponentActivity() {
 
-    // Código usado para identificar a resposta do pedido de permissões
-    // (o Android devolve esse mesmo código em onRequestPermissionsResult).
-    private val permissionRequestCode = 1001
+    private lateinit var session: CommunicatorSession
 
-    // Limite de caracteres por mensagem, alinhado ao mesmo limite já
-    // usado pelo HapticMessageService do lado do Surdocego.
-    private val maxMessageLength = 50
-
-    private lateinit var nearbyService: NearbyConnectionService
-    private val conversationStateMachine = ConversationStateMachine()
-    private val conversationHistory = InMemoryConversationHistoryRepository()
-    private lateinit var messageAdapter: MessageAdapter
-
-    private lateinit var textConnectionStatus: TextView
-    private lateinit var recyclerMessages: RecyclerView
-    private lateinit var editMessageInput: EditText
-    private lateinit var buttonSend: Button
-    private lateinit var buttonReconnect: Button
-
+    // Estado observado pelo Compose: muda quando a pessoa permite (no diálogo ou nas configurações).
+    private var permissionsGranted by mutableStateOf(false)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_communicator)
+        enableEdgeToEdge()
 
-        textConnectionStatus = findViewById(R.id.textConnectionStatus)
-        recyclerMessages = findViewById(R.id.recyclerMessages)
-        editMessageInput = findViewById(R.id.editMessageInput)
-        buttonSend = findViewById(R.id.buttonSend)
+        session = CommunicatorSession(
+            context = applicationContext,
+            profile = CommunicatorProfilePreferencesRepository(this),
+            archive = PreferencesConversationArchive(this),
+        )
 
-        setupMessageList()
-        setupSendButton()
+        permissionsGranted = hasAllPermissions()
 
-        // O NearbyConnectionService precisa de "this" como listener,
-        // por isso só é criado depois que a Activity já existe.
-        nearbyService = NearbyConnectionService(this, this)
-
-        // Toda vez que uma mensagem entra no histórico (enviada ou
-        // recebida), a lista na tela é atualizada automaticamente.
-        conversationHistory.setOnMessageAddedListener {
-            atualizarListaDeMensagens()
-        }
-
-        pedirPermissoesENecessarias()
-
-
-
-// dentro do onCreate, junto aos outros findViewById:
-        buttonReconnect = findViewById(R.id.buttonReconnect)
-
-        buttonReconnect.setOnClickListener {
-            if (nearbyService.getCurrentState() == ConnectionState.DISCONNECTED) {
-                nearbyService.startAdvertising("Comunicador")
+        setContent {
+            ContatoTheme {
+                CommunicatorApp(
+                    session = session,
+                    permissionsGranted = permissionsGranted,
+                    onPermissionsResult = { permissionsGranted = hasAllPermissions() },
+                    onOpenAppSettings = ::openAppSettings,
+                )
             }
         }
     }
 
-    /**
-     * Configura o RecyclerView: define o layout (itens empilhados
-     * verticalmente, do mais antigo no topo ao mais recente embaixo)
-     * e conecta o MessageAdapter que criamos anteriormente.
-     */
-    private fun setupMessageList() {
-        recyclerMessages.layoutManager = LinearLayoutManager(this)
-        messageAdapter = MessageAdapter(currentUserMode = UserMode.COMMUNICATOR)
-        recyclerMessages.adapter = messageAdapter
+    override fun onResume() {
+        super.onResume()
+        permissionsGranted = hasAllPermissions()
     }
 
-    private fun setupSendButton() {
-        buttonSend.setOnClickListener {
-            val texto = editMessageInput.text.toString().trim()
+    override fun onDestroy() {
+        session.release()
+        super.onDestroy()
+    }
 
-            if (texto.isEmpty() || texto.length > maxMessageLength) {
-                return@setOnClickListener
-            }
-
-            enviarMensagem(texto)
-            editMessageInput.text.clear()
+    private fun hasAllPermissions(): Boolean =
+        NearbyPermissions.getRequiredPermissions().all {
+            ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED
         }
-    }
 
-    /**
-     * Pede as permissões necessárias para o Nearby funcionar. Assim como
-     * na DeafblindActivity, startAdvertising() SÓ é chamado depois que o
-     * usuário responde ao pedido de permissão (dentro de
-     * onRequestPermissionsResult), nunca aqui direto — isso evita o bug
-     * de "race condition" já corrigido anteriormente no projeto.
-     */
-    private fun pedirPermissoesENecessarias() {
-        requestPermissions(
-            NearbyPermissions.getRequiredPermissions(),
-            permissionRequestCode
+    /** Quando a pessoa negou de vez, só dá para liberar pelas configurações do Android. */
+    private fun openAppSettings() {
+        startActivity(
+            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", packageName, null))
         )
     }
-
-    override fun onRequestPermissionsResult(
-        requestCode: Int,
-        permissions: Array<out String>,
-        grantResults: IntArray
-    ) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-
-        if (requestCode == permissionRequestCode) {
-            val todasConcedidas = grantResults.isNotEmpty() &&
-                    grantResults.all { it == android.content.pm.PackageManager.PERMISSION_GRANTED }
-
-            if (todasConcedidas) {
-                nearbyService.startAdvertising("Comunicador")
-            } else {
-                textConnectionStatus.text = "Permissões negadas — não é possível conectar"
-            }
-        }
-    }
-
-    /**
-     * Monta e envia uma mensagem de texto ao Surdocego.
-     *
-     * Segue o ciclo de estados da conversa (IDLE -> COMPOSING -> PROCESSING
-     * -> SENDING -> SENT -> WAITING_RESPONSE), conforme a ConversationStateMachine
-     * já validada com testes JUnit.
-     *
-     * PENDÊNCIA CONHECIDA: o status SENT é aplicado de forma otimista, assim
-     * que o envio é disparado — o Nearby não confirma entrega real neste
-     * ponto (isso exigiria tratar onPayloadTransferUpdate, ainda não feito).
-     */
-    private fun enviarMensagem(conteudo: String) {
-        conversationStateMachine.transitionTo(ConversationState.COMPOSING)
-        conversationStateMachine.transitionTo(ConversationState.PROCESSING)
-        conversationStateMachine.transitionTo(ConversationState.SENDING)
-
-        val mensagem = Message(
-            id = UUID.randomUUID().toString(),
-            content = conteudo,
-            sender = UserMode.COMMUNICATOR,
-            timestamp = System.currentTimeMillis(),
-            status = MessageStatus.SENDING
-        )
-
-        // Adiciona a mensagem já na tela (otimista), antes mesmo da
-        // confirmação real de entrega — comportamento comum em apps de chat.
-        conversationHistory.addMessage(mensagem)
-
-        nearbyService.sendMessage(conteudo)
-
-        conversationStateMachine.transitionTo(ConversationState.SENT)
-        conversationStateMachine.transitionTo(ConversationState.WAITING_RESPONSE)
-    }
-
-    private fun atualizarListaDeMensagens() {
-        messageAdapter.submitMessages(conversationHistory.getMessages())
-        // Rola a lista automaticamente para a mensagem mais recente.
-        recyclerMessages.scrollToPosition(conversationHistory.getMessages().size - 1)
-    }
-
-    // --- Implementação de NearbyListener ---
-
-    override fun onMessageReceived(message: String) {
-        conversationStateMachine.transitionTo(ConversationState.RECEIVING)
-
-        val mensagem = Message(
-            id = UUID.randomUUID().toString(),
-            content = message,
-            sender = UserMode.DEAFBLIND,
-            timestamp = System.currentTimeMillis(),
-            status = MessageStatus.SENT
-        )
-
-        conversationHistory.addMessage(mensagem)
-
-        conversationStateMachine.transitionTo(ConversationState.RECEIVED)
-        conversationStateMachine.transitionTo(ConversationState.IDLE)
-    }
-
-    override fun onConnectionStatusChanged(status: String) {
-        textConnectionStatus.text = status
-    }
-
-    override fun onConnectionStateChanged(state: ConnectionState) {
-
-        // O botão de enviar só fica ativo quando há, de fato, uma conexão
-        // estabelecida com o Surdocego.
-        android.util.Log.d("ConTato", "Estado de conexão recebido: $state")
-        buttonSend.isEnabled = (state == ConnectionState.CONNECTED)
-        android.util.Log.d("ConTato", "Botão enviar habilitado? ${buttonSend.isEnabled}")
-
-    }
-
-
-
-
 }

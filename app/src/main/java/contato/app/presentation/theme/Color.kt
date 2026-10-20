@@ -38,4 +38,4 @@ val ContatoBlueOnDark = Color(0xFF5C97FF)
  * arquivo estão no roxo padrão do Material 3. Por enquanto reaproveita o navy
  * da marca; trocar aqui quando o valor oficial existir.
  */
-val ContatoDarkSurface = ContatoNavy
+val ContatoDarkSurface = Color(0xFF141C28)

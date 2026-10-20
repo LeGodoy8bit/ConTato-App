@@ -106,6 +106,13 @@ object SystemHapticPatterns {
             SystemFeedbackEvent.SPLASH_SYMBOL_FORMED ->
                 listOf(HapticPulse(HapticConfig.SPLASH_FORMED_DURATION, strong))
 
+            // Toque curto ao marcar/desmarcar um ponto da cela: confirma o toque sem atrapalhar.
+            SystemFeedbackEvent.DOT_ON ->
+                listOf(HapticPulse(HapticConfig.DOT_ON_DURATION, HapticConfig.DOT_ON_AMPLITUDE))
+
+            SystemFeedbackEvent.DOT_OFF ->
+                listOf(HapticPulse(HapticConfig.DOT_OFF_DURATION, HapticConfig.DOT_OFF_AMPLITUDE))
+
         }
     }
 }

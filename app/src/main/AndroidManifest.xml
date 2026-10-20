@@ -49,16 +49,14 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.ConTatoApp">
 
-        <!-- Tela inicial do aplicativo: apresenta a Splash Screen -->
+        <!-- Tela inicial do aplicativo: splash completa na 1ª abertura, curta nas seguintes -->
         <activity
-            android:name=".presentation.debug.VibrationDebugActivity"
+            android:name=".presentation.onboarding.SplashActivity"
             android:exported="true">
-
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-
         </activity>
 
         <!-- Tela de seleção do modo de comunicação -->

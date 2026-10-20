@@ -40,5 +40,13 @@ object HapticConfig {
     const val SPLASH_FORMED_DURATION = 250L
 
 
+    // TOQUE NOS PONTOS DA CELA (modo Surdocego): marcar = firme, desmarcar = leve.
+    // Bem mais curtos que qualquer ponto Braille, para não serem confundidos com mensagem.
+    const val DOT_ON_DURATION = 35L
+    const val DOT_ON_AMPLITUDE = 255
+    const val DOT_OFF_DURATION = 20L
+    const val DOT_OFF_AMPLITUDE = 70
+
+
 
 }

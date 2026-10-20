@@ -8,23 +8,26 @@ import contato.app.domain.service.HapticMessageService
  * Ponto único de entrada para transformar um texto em vibração.
  *
  * Esconde a coordenação entre HapticMessageService (domínio: texto -> HapticMessage)
- * e HapticController (infraestrutura: HapticMessage -> vibração real). Sem esta
- * fachada, cada tela que precisa vibrar uma mensagem (MainActivity, NearbyDebugActivity,
- * e futuramente a tela de recebimento via Nearby) teria que repetir essa coordenação.
+ * e HapticController (infraestrutura: HapticMessage -> vibração real), para que
+ * nenhuma tela precise repetir essa coordenação.
  */
 class HapticMessagePlaybackService(context: Context) {
 
     private val hapticMessageService = HapticMessageService()
     private val hapticController = HapticController(context)
 
-
     /** Repassa um padrão de vibração de sistema para o HapticController. */
     fun playSystemFeedback(pulses: List<HapticPulse>) {
         hapticController.playSystemFeedback(pulses)
     }
-    fun play(text: String) {
+
+    /**
+     * Vibra o texto em Braille.
+     * @return duração total em milissegundos (quem não precisa pode ignorar).
+     */
+    fun play(text: String): Long {
         val message = hapticMessageService.createMessage(text)
-        hapticController.playMessage(message)
+        return hapticController.playMessage(message)
     }
 
     fun stop() {

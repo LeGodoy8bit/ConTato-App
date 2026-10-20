@@ -1,8 +1,6 @@
 package contato.app.domain.service
 
 import contato.app.core.config.HapticConfig
-import contato.app.domain.model.HapticEvent
-import contato.app.domain.model.HapticEventType
 import contato.app.domain.model.HapticMessage
 import contato.app.domain.model.HapticPattern
 
@@ -10,13 +8,21 @@ class HapticMessageService(
     private val hapticPatternService: HapticPatternService = HapticPatternService()
 ) {
 
+    /**
+     * Converte um texto em HapticMessage.
+     *
+     * O texto passa antes pelo BrailleTextNormalizer: acentos, "ç", números e
+     * pontuação não derrubam mais o app (antes, "Olá" lançava exceção no BrailleMapper).
+     */
     fun createMessage(message: String): HapticMessage {
 
-        require(message.length <= HapticConfig.MAX_MESSAGE_LENGTH) {
+        val normalized = BrailleTextNormalizer.normalizeForBraille(message)
+
+        require(normalized.length <= HapticConfig.MAX_MESSAGE_LENGTH) {
             "Mensagem excede o limite de ${HapticConfig.MAX_MESSAGE_LENGTH} caracteres"
         }
 
-        val messagePattern = message.uppercase().map { char -> //adicionado logica para reconhecer espaço
+        val messagePattern = normalized.map { char ->
             if (char == ' ') {
                 createSpacePattern()
             } else {
@@ -31,6 +37,4 @@ class HapticMessageService(
     private fun createSpacePattern(): HapticPattern {
         return HapticPattern(events = emptyList())
     }
-
-    }
-
+}

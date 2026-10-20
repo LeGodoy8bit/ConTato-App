@@ -22,7 +22,9 @@ enum class SystemFeedbackEvent {
     ERROR, //Ocorreu algum erro no sistema
     COMMAND_RECOGNIZED, // seção 3.9: cada comando (apagar, espaço, confirmar) precisa de feedback próprio
     SPLASH_TYPING_TICK,
-    SPLASH_SYMBOL_FORMED
+    SPLASH_SYMBOL_FORMED,
+    DOT_ON,  // ponto da cela marcado
+    DOT_OFF, // ponto da cela desmarcado
 
 
 }
