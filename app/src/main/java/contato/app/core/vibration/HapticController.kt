@@ -6,9 +6,11 @@ import android.os.Vibrator
 import android.os.VibratorManager
 import contato.app.domain.model.HapticMessage
 import contato.app.domain.model.HapticPattern
+import contato.app.domain.model.HapticTuning
 import contato.app.domain.model.HapticPulse
 import contato.app.domain.model.HapticWaveform
 import contato.app.domain.service.HapticWaveformBuilder
+import contato.app.domain.service.HapticWaveformTuner
 import contato.app.domain.service.SystemHapticWaveformBuilder
 
 class HapticController(context: Context) {
@@ -26,8 +28,14 @@ class HapticController(context: Context) {
     private val waveformBuilder = HapticWaveformBuilder()
     private val systemWaveformBuilder = SystemHapticWaveformBuilder()
 
+    /**
+     * Força e ritmo escolhidos nos Ajustes do Surdocego. Vale só para as letras Braille;
+     * as vibrações de sistema (conectado, erro...) ficam sempre iguais para serem reconhecíveis.
+     */
+    var tuning: HapticTuning = HapticTuning.DEFAULT
+
     fun play(pattern: HapticPattern) {
-        vibrate(waveformBuilder.buildCharacterWaveform(pattern))
+        vibrate(HapticWaveformTuner.tune(waveformBuilder.buildCharacterWaveform(pattern), tuning))
     }
 
     /**
@@ -36,7 +44,7 @@ class HapticController(context: Context) {
      *         Usado pela tela de termos para saber quando o item terminou de vibrar.
      */
     fun playMessage(message: HapticMessage): Long {
-        return vibrate(waveformBuilder.buildMessageWaveform(message))
+        return vibrate(HapticWaveformTuner.tune(waveformBuilder.buildMessageWaveform(message), tuning))
     }
 
     /**

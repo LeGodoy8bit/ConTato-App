@@ -15,6 +15,8 @@ import androidx.core.content.ContextCompat
 import contato.app.core.connection.NearbyPermissions
 import contato.app.data.CommunicatorProfilePreferencesRepository
 import contato.app.data.PreferencesConversationArchive
+import contato.app.domain.model.UserMode
+import contato.app.presentation.common.CloudAccount
 import contato.app.presentation.communicator.CommunicatorApp
 import contato.app.presentation.communicator.CommunicatorSession
 import contato.app.presentation.theme.ContatoTheme
@@ -40,7 +42,8 @@ class CommunicatorActivity : ComponentActivity() {
         session = CommunicatorSession(
             context = applicationContext,
             profile = CommunicatorProfilePreferencesRepository(this),
-            archive = PreferencesConversationArchive(this),
+            archive = PreferencesConversationArchive(this, PreferencesConversationArchive.COMMUNICATOR_FILE),
+            account = CloudAccount(this, UserMode.COMMUNICATOR),
         )
 
         permissionsGranted = hasAllPermissions()

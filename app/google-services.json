@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "341005779839",
+    "project_id": "contatoapp-25823",
+    "storage_bucket": "contatoapp-25823.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:341005779839:android:3b1bfc1918f886a613504a",
+        "android_client_info": {
+          "package_name": "contato.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "341005779839-gm4fii739v1fjr54i3dco4hf9dehust0.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "contato.app",
+            "certificate_hash": "834d7845116f86a7f5801d251f76c1f29ced7a9e"
+          }
+        },
+        {
+          "client_id": "341005779839-39imisgmp9q6hsg1ehgjo1o9pvnu0ggp.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCcCebm69qxgjsVjQkOBUAUP6GKBCkWO7I"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "341005779839-39imisgmp9q6hsg1ehgjo1o9pvnu0ggp.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

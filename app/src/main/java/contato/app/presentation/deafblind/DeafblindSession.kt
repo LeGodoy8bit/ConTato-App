@@ -5,6 +5,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -12,11 +13,19 @@ import androidx.compose.runtime.setValue
 import contato.app.core.connection.NearbyConnectionService
 import contato.app.core.connection.NearbyListener
 import contato.app.core.vibration.HapticMessagePlaybackService
+import contato.app.domain.model.Conversation
+import contato.app.domain.model.DeafblindSettings
+import contato.app.domain.model.Message
+import contato.app.domain.model.MessageStatus
 import contato.app.domain.model.SystemFeedbackEvent
+import contato.app.domain.model.UserMode
 import contato.app.domain.model.WireMessage
 import contato.app.domain.service.BrailleMapper
 import contato.app.domain.service.BrailleTextNormalizer
 import contato.app.domain.service.ConnectionFeedbackMapper
+import contato.app.domain.service.ConversationMerger
+import contato.app.domain.service.DeafblindSettingsCodec
+import contato.app.domain.service.HapticWaveformTuner
 import contato.app.domain.service.HapticTimelineBuilder
 import contato.app.domain.service.MessageBuilder
 import contato.app.domain.service.SystemHapticPatterns
@@ -24,6 +33,9 @@ import contato.app.domain.service.WireProtocol
 import contato.app.domain.state.ConnectionState
 import contato.app.domain.state.DeafblindModeState
 import contato.app.domain.state.DeafblindModeStateMachine
+import contato.app.domain.repository.ConversationArchive
+import contato.app.domain.repository.DeafblindSettingsRepository
+import contato.app.presentation.common.CloudAccount
 import java.util.UUID
 
 /** Último comando reconhecido, mostrado na área de gestos (para a pessoa de apoio acompanhar). */
@@ -37,7 +49,12 @@ internal data class CommandEcho(val text: String, val ok: Boolean, val key: Long
  * - Composição da resposta na cela Braille de 6 pontos + comandos por gesto.
  * - Tudo passa pela DeafblindModeStateMachine.
  */
-internal class DeafblindSession(context: Context) : NearbyListener {
+internal class DeafblindSession(
+    context: Context,
+    private val settingsRepository: DeafblindSettingsRepository,
+    private val archive: ConversationArchive,
+    val account: CloudAccount,
+) : NearbyListener {
 
     private val nearby = NearbyConnectionService(context, this)
     private val playback = HapticMessagePlaybackService(context)
@@ -75,9 +92,138 @@ internal class DeafblindSession(context: Context) : NearbyListener {
     val canCompose: Boolean
         get() = connectionState == ConnectionState.CONNECTED && message != null && !isPlaying
 
+    /** Preferências (vibração, texto, tema, dicas). */
+    var settings by mutableStateOf(settingsRepository.load())
+        private set
+
+    /** Histórico: uma conversa por comunicador, como no Comunicador. */
+    val conversations = mutableStateListOf<Conversation>()
+    var activeConversationId by mutableStateOf<String?>(null)
+        private set
+    val unreadTotal by derivedStateOf { conversations.sumOf { it.unreadCount(UserMode.DEAFBLIND) } }
+
     private var lastReceivedId = ""
     private var active = false
     private var permitted = false
+
+    init {
+        playback.tuning = settings.tuning
+        if (settings.saveHistory) conversations.addAll(archive.loadAll().sortedByDescending { it.updatedAt })
+        if (account.isSignedIn && settings.saveHistory) pullCloud(pushAfter = false)
+    }
+
+    // ───────── Ajustes ─────────
+
+    /** Salva e aplica na hora. Mudou a vibração: toca a letra A para a pessoa sentir a diferença. */
+    fun updateSettings(new: DeafblindSettings) {
+        val old = settings
+        settings = new
+        settingsRepository.save(new)
+        playback.tuning = new.tuning
+        if (new.intensity != old.intensity || new.speed != old.speed) playback.play("A")
+        if (new.saveHistory != old.saveHistory) {
+            if (new.saveHistory) archive.saveAll(conversations.toList()) else archive.clear()
+        }
+        if (new != old) account.saveProfile(localName, DeafblindSettingsCodec.toMap(new))
+    }
+
+    // ───────── Treino ─────────
+
+    /** Vibra uma letra (treino e "testar vibração"), com a força e o ritmo escolhidos. */
+    fun playLetter(letter: Char) {
+        if (isPlaying) return
+        playback.play(letter.toString())
+    }
+
+    /** Vibração curta de ponto marcado/desmarcado, para a cela do treino. */
+    fun dotFeedback(on: Boolean) = feedback(if (on) SystemFeedbackEvent.DOT_ON else SystemFeedbackEvent.DOT_OFF)
+
+    fun trainingResult(correct: Boolean) =
+        feedback(if (correct) SystemFeedbackEvent.MESSAGE_FINISHED else SystemFeedbackEvent.ERROR)
+
+    // ───────── Histórico e conta ─────────
+
+    fun markRead(id: String) {
+        val i = conversations.indexOfFirst { it.id == id }
+        if (i < 0) return
+        val c = conversations[i]
+        val last = c.lastMessage?.timestamp ?: return
+        if (c.lastReadAt >= last) return
+        conversations[i] = c.copy(lastReadAt = last)
+        persist(conversations[i], emptyList())
+    }
+
+    private fun activateConversationFor(peer: String) {
+        val key = ConversationMerger.peerKey(peer)
+        val existing = conversations.firstOrNull { ConversationMerger.peerKey(it.peerName) == key }
+        activeConversationId = (existing ?: Conversation(
+            id = UUID.randomUUID().toString(),
+            peerName = peer,
+            messages = emptyList(),
+            updatedAt = System.currentTimeMillis(),
+        ).also { conversations.add(0, it) }).id
+    }
+
+    private fun record(message: Message) {
+        val id = activeConversationId ?: return
+        val i = conversations.indexOfFirst { it.id == id }
+        if (i < 0) return
+        val c = conversations[i]
+        val updated = c.copy(
+            messages = (c.messages.filter { it.id != message.id } + message).takeLast(Conversation.MAX_MESSAGES),
+            updatedAt = message.timestamp,
+        )
+        conversations.removeAt(i)
+        conversations.add(0, updated)
+        persist(updated, listOf(message))
+    }
+
+    private fun persist(conversation: Conversation, changed: List<Message>) {
+        if (!settings.saveHistory) return
+        archive.saveAll(conversations.toList())
+        account.push(conversation, changed)
+    }
+
+    /** Login feito pela pessoa de apoio. Ao entrar, junta o histórico do aparelho com o da nuvem. */
+    fun signIn(activityContext: Context) {
+        account.launchSignIn(activityContext) {
+            // Já tinha conta: aplica as preferências salvas (vibração, texto, cores) neste celular.
+            account.fetchProfile { cloud ->
+                if (cloud != null) updateSettings(DeafblindSettingsCodec.fromMap(cloud.preferences, settings))
+                account.saveProfile(localName, DeafblindSettingsCodec.toMap(settings))
+            }
+            if (!settings.saveHistory) updateSettings(settings.copy(saveHistory = true))
+            pullCloud(pushAfter = true)
+            feedback(SystemFeedbackEvent.CONNECTED)
+        }
+    }
+
+    fun signOut(activityContext: Context) = account.launchSignOut(activityContext)
+
+    fun clearHistory() {
+        conversations.clear()
+        activeConversationId = null
+        if (connectionState == ConnectionState.CONNECTED) {
+            activateConversationFor(peerName?.takeIf { it.isNotBlank() } ?: DEFAULT_PEER)
+        }
+        archive.clear()
+        if (account.isSignedIn) account.deleteCloudData { }
+    }
+
+    private fun pullCloud(pushAfter: Boolean) {
+        account.pull { remote ->
+            val activePeer = conversations.firstOrNull { it.id == activeConversationId }?.peerName
+            val merged = ConversationMerger.merge(conversations.toList(), remote)
+            conversations.clear()
+            conversations.addAll(merged)
+            if (activePeer != null) {
+                val key = ConversationMerger.peerKey(activePeer)
+                activeConversationId = merged.firstOrNull { ConversationMerger.peerKey(it.peerName) == key }?.id
+            }
+            archive.saveAll(merged)
+            if (pushAfter) merged.forEach { account.push(it, it.messages) }
+        }
+    }
 
     // ───────── Ciclo de vida ─────────
 
@@ -153,7 +299,7 @@ internal class DeafblindSession(context: Context) : NearbyListener {
         composed = messageBuilder.currentText
     }
 
-    /** Segurar: envia a resposta. */
+    /** Deslizar para cima: envia a resposta. */
     fun send() {
         if (!canCompose) { rejectNoMessage(); return }
         val text = messageBuilder.currentText.trim()
@@ -164,7 +310,10 @@ internal class DeafblindSession(context: Context) : NearbyListener {
         }
         enterComposing()
         modeStateMachine.transitionTo(DeafblindModeState.SENDING_MESSAGE)
-        nearby.sendMessage(WireProtocol.encode(WireMessage.Text(UUID.randomUUID().toString(), text)))
+        val replyId = UUID.randomUUID().toString()
+        nearby.sendMessage(WireProtocol.encode(WireMessage.Text(replyId, text)))
+        // DELIVERED: o Nearby entregou ao comunicador (SENT viraria "falhou" ao reabrir o histórico).
+        record(Message(replyId, text, UserMode.DEAFBLIND, System.currentTimeMillis(), MessageStatus.DELIVERED))
         feedback(SystemFeedbackEvent.MESSAGE_SENT)
         echo = CommandEcho("Resposta enviada", ok = true)
         messageBuilder.clear()
@@ -174,7 +323,7 @@ internal class DeafblindSession(context: Context) : NearbyListener {
         modeStateMachine.transitionTo(DeafblindModeState.WAITING_MESSAGE)
     }
 
-    /** Deslizar para cima: repete a última mensagem (o Comunicador vê vibrando de novo). */
+    /** Deslizar para baixo: repete a última mensagem (o Comunicador vê vibrando de novo). */
     fun repeatLast() {
         val text = message
         if (text == null || connectionState != ConnectionState.CONNECTED) {
@@ -234,6 +383,9 @@ internal class DeafblindSession(context: Context) : NearbyListener {
             modeStateMachine.transitionTo(DeafblindModeState.RECEIVING_MESSAGE)
         }
         if (wire.id.isNotEmpty()) nearby.sendMessage(WireProtocol.encode(WireMessage.Received(wire.id)))
+        record(Message(wire.id.ifEmpty { UUID.randomUUID().toString() }, wire.text, UserMode.COMMUNICATOR,
+            System.currentTimeMillis(), MessageStatus.DELIVERED))
+        activeConversationId?.let(::markRead) // a pessoa sente a mensagem na hora: já conta como lida
         playWithProgress(wire.text, wire.id)
     }
 
@@ -252,17 +404,19 @@ internal class DeafblindSession(context: Context) : NearbyListener {
         playback.play(text)
         isPlaying = true
         val start = SystemClock.uptimeMillis()
+        // Os tempos acompanham a velocidade escolhida nos Ajustes (lenta/normal/rápida).
+        val tuning = settings.tuning
         timeline.steps.forEach { step ->
             handler.postAtTime({
                 playingIndex = step.index
                 if (id.isNotEmpty()) nearby.sendMessage(WireProtocol.encode(WireMessage.Progress(id, step.index)))
-            }, PROGRESS_TOKEN, start + step.startMs)
+            }, PROGRESS_TOKEN, start + HapticWaveformTuner.scaleTime(step.startMs, tuning))
         }
         handler.postAtTime({
             isPlaying = false
             playingIndex = -1
             if (id.isNotEmpty()) nearby.sendMessage(WireProtocol.encode(WireMessage.Played(id)))
-        }, PROGRESS_TOKEN, start + timeline.totalMs)
+        }, PROGRESS_TOKEN, start + HapticWaveformTuner.scaleTime(timeline.totalMs, tuning))
     }
 
     /** Toque na área de gestos durante a vibração: interrompe. */
@@ -289,6 +443,7 @@ internal class DeafblindSession(context: Context) : NearbyListener {
         when (state) {
             ConnectionState.CONNECTED -> {
                 peerName = nearby.getConnectedEndpointName()
+                activateConversationFor(peerName?.takeIf { it.isNotBlank() } ?: DEFAULT_PEER)
                 modeStateMachine.transitionTo(DeafblindModeState.CONNECTED)
                 modeStateMachine.transitionTo(DeafblindModeState.WAITING_MESSAGE)
             }
@@ -314,6 +469,7 @@ internal class DeafblindSession(context: Context) : NearbyListener {
     }
 
     fun release() {
+        account.release()
         active = false
         handler.removeCallbacksAndMessages(null)
         playback.stop()
@@ -322,6 +478,7 @@ internal class DeafblindSession(context: Context) : NearbyListener {
 
     companion object {
         private val PROGRESS_TOKEN = Any()
+        private const val DEFAULT_PEER = "Comunicador"
         private const val RECONNECT_DELAY_MS = 2000L
         private const val REPEAT_DELAY_MS = 450L // deixa o pulso de "comando reconhecido" terminar
     }

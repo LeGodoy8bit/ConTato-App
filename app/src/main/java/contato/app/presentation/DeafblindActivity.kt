@@ -14,6 +14,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.core.content.ContextCompat
 import contato.app.core.connection.NearbyPermissions
+import contato.app.data.DeafblindSettingsPreferencesRepository
+import contato.app.data.PreferencesConversationArchive
+import contato.app.domain.model.DeafblindTheme
+import contato.app.domain.model.UserMode
+import contato.app.presentation.common.CloudAccount
 import contato.app.presentation.deafblind.DeafblindApp
 import contato.app.presentation.deafblind.DeafblindSession
 import contato.app.presentation.theme.ContatoTheme
@@ -32,11 +37,16 @@ class DeafblindActivity : ComponentActivity() {
         enableEdgeToEdge()
         // A tela não apaga sozinha: se apagasse, o onPause encerraria a conexão no meio da conversa.
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        session = DeafblindSession(applicationContext)
+        session = DeafblindSession(
+            context = applicationContext,
+            settingsRepository = DeafblindSettingsPreferencesRepository(this),
+            archive = PreferencesConversationArchive(this, PreferencesConversationArchive.DEAFBLIND_FILE),
+            account = CloudAccount(this, UserMode.DEAFBLIND),
+        )
         permissionsGranted = hasAllPermissions()
 
         setContent {
-            ContatoTheme(darkTheme = true) {
+            ContatoTheme(darkTheme = session.settings.theme == DeafblindTheme.HIGH_CONTRAST) {
                 DeafblindApp(
                     session = session,
                     permissionsGranted = permissionsGranted,
@@ -57,7 +67,8 @@ class DeafblindActivity : ComponentActivity() {
     /** Para a vibração e encerra a conexão quando o app sai de foco. */
     override fun onPause() {
         super.onPause()
-        session.setActive(false)
+        // A janela do Google (login feito pela pessoa de apoio) pausa o app: aí não derruba a conexão.
+        if (!session.account.busy) session.setActive(false)
     }
 
     override fun onDestroy() {

@@ -1,6 +1,7 @@
 package contato.app.data
 
 import android.content.Context
+import contato.app.domain.model.Conversation
 import contato.app.domain.model.Message
 import contato.app.domain.model.MessageStatus
 import contato.app.domain.model.MessageType
@@ -8,36 +9,80 @@ import contato.app.domain.model.UserMode
 import contato.app.domain.repository.ConversationArchive
 import org.json.JSONArray
 import org.json.JSONObject
+import java.util.UUID
 
 /**
- * Guarda as últimas mensagens no próprio aparelho (JSON em SharedPreferences).
- * Só é usado quando o Comunicador liga "Guardar conversas neste aparelho".
- * org.json já vem com o Android: nenhuma dependência nova.
+ * Guarda as conversas no próprio aparelho (JSON em SharedPreferences; org.json já vem no Android).
+ *
+ * Cada modo usa um arquivo próprio ([preferencesName]), para o Comunicador e o Surdocego
+ * no mesmo celular (testes) não misturarem históricos.
+ *
+ * Migração: a versão anterior guardava uma lista solta de mensagens na chave "messages".
+ * Ela vira uma conversa com "Celular tátil" na primeira leitura e a chave antiga é apagada.
  */
-class PreferencesConversationArchive(context: Context) : ConversationArchive {
+class PreferencesConversationArchive(
+    context: Context,
+    preferencesName: String = COMMUNICATOR_FILE,
+) : ConversationArchive {
 
     private val preferences =
-        context.applicationContext.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)
+        context.applicationContext.getSharedPreferences(preferencesName, Context.MODE_PRIVATE)
 
-    override fun load(): List<Message> {
-        val raw = preferences.getString(KEY_MESSAGES, null) ?: return emptyList()
+    override fun loadAll(): List<Conversation> {
+        migrateLegacy()
+        val raw = preferences.getString(KEY_CONVERSATIONS, null) ?: return emptyList()
         return runCatching {
             val array = JSONArray(raw)
-            List(array.length()) { i -> fromJson(array.getJSONObject(i)) }
+            List(array.length()) { i -> conversationFromJson(array.getJSONObject(i)) }
         }.getOrDefault(emptyList())
     }
 
-    override fun save(messages: List<Message>) {
+    override fun saveAll(conversations: List<Conversation>) {
         val array = JSONArray()
-        messages.takeLast(MAX_MESSAGES).forEach { array.put(toJson(it)) }
-        preferences.edit().putString(KEY_MESSAGES, array.toString()).apply()
+        conversations.forEach { array.put(conversationToJson(it)) }
+        preferences.edit().putString(KEY_CONVERSATIONS, array.toString()).apply()
     }
 
     override fun clear() {
-        preferences.edit().remove(KEY_MESSAGES).apply()
+        preferences.edit().remove(KEY_CONVERSATIONS).remove(KEY_LEGACY_MESSAGES).apply()
     }
 
-    private fun toJson(message: Message) = JSONObject()
+    private fun migrateLegacy() {
+        val legacy = preferences.getString(KEY_LEGACY_MESSAGES, null) ?: return
+        val messages = runCatching {
+            val array = JSONArray(legacy)
+            List(array.length()) { i -> messageFromJson(array.getJSONObject(i)) }
+        }.getOrDefault(emptyList())
+        if (messages.isNotEmpty() && preferences.getString(KEY_CONVERSATIONS, null) == null) {
+            saveAll(listOf(Conversation(UUID.randomUUID().toString(), LEGACY_PEER, messages,
+                updatedAt = messages.maxOf { it.timestamp }, lastReadAt = messages.maxOf { it.timestamp })))
+        }
+        preferences.edit().remove(KEY_LEGACY_MESSAGES).apply()
+    }
+
+    private fun conversationToJson(c: Conversation): JSONObject {
+        val messages = JSONArray()
+        c.messages.takeLast(Conversation.MAX_MESSAGES).forEach { messages.put(messageToJson(it)) }
+        return JSONObject()
+            .put("id", c.id)
+            .put("peerName", c.peerName)
+            .put("updatedAt", c.updatedAt)
+            .put("lastReadAt", c.lastReadAt)
+            .put("messages", messages)
+    }
+
+    private fun conversationFromJson(json: JSONObject): Conversation {
+        val array = json.optJSONArray("messages") ?: JSONArray()
+        return Conversation(
+            id = json.getString("id"),
+            peerName = json.getString("peerName"),
+            messages = List(array.length()) { i -> messageFromJson(array.getJSONObject(i)) },
+            updatedAt = json.optLong("updatedAt"),
+            lastReadAt = json.optLong("lastReadAt"),
+        )
+    }
+
+    private fun messageToJson(message: Message) = JSONObject()
         .put("id", message.id)
         .put("content", message.content)
         .put("sender", message.sender.name)
@@ -45,23 +90,28 @@ class PreferencesConversationArchive(context: Context) : ConversationArchive {
         .put("status", message.status.name)
         .put("type", message.type.name)
 
-    private fun fromJson(json: JSONObject) = Message(
+    private fun messageFromJson(json: JSONObject) = Message(
         id = json.getString("id"),
         content = json.getString("content"),
         sender = UserMode.valueOf(json.getString("sender")),
         timestamp = json.getLong("timestamp"),
-        // Mensagens que ficaram "no meio do caminho" quando o app fechou não voltam como em andamento.
-        status = when (val s = MessageStatus.valueOf(json.getString("status"))) {
-            MessageStatus.SENDING, MessageStatus.SENT -> MessageStatus.FAILED
-            MessageStatus.PLAYING -> MessageStatus.DELIVERED
-            else -> s
-        },
+        status = restoredStatus(json.getString("status")),
         type = runCatching { MessageType.valueOf(json.getString("type")) }.getOrDefault(MessageType.TEXT),
     )
 
     companion object {
-        private const val PREFERENCES_NAME = "contato_history"
-        private const val KEY_MESSAGES = "messages"
-        private const val MAX_MESSAGES = 200
+        const val COMMUNICATOR_FILE = "contato_history"
+        const val DEAFBLIND_FILE = "contato_history_deafblind"
+        private const val KEY_CONVERSATIONS = "conversations"
+        private const val KEY_LEGACY_MESSAGES = "messages"
+        private const val LEGACY_PEER = "Celular tátil"
+
+        /** Mensagens que ficaram "no meio do caminho" quando o app fechou não voltam como em andamento. */
+        fun restoredStatus(name: String): MessageStatus =
+            when (val s = runCatching { MessageStatus.valueOf(name) }.getOrDefault(MessageStatus.DELIVERED)) {
+                MessageStatus.SENDING, MessageStatus.SENT -> MessageStatus.FAILED
+                MessageStatus.PLAYING -> MessageStatus.DELIVERED
+                else -> s
+            }
     }
 }

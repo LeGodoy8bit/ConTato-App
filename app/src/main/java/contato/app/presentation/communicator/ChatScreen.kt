@@ -15,8 +15,8 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.Send
-import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Icon
@@ -33,6 +33,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
@@ -40,6 +41,7 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -47,31 +49,74 @@ import contato.app.domain.model.Message
 import contato.app.domain.model.MessageStatus
 import contato.app.domain.model.UserMode
 import contato.app.domain.state.ConnectionState
+import contato.app.presentation.theme.ContatoIcons
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-// ───────────────────────── Aba Conversa ─────────────────────────
+// ───────────────────────── Conversa aberta ─────────────────────────
 
+/** Item da lista: separador de dia ("Hoje") ou balão. */
+private sealed interface ChatItem {
+    val key: String
+    /** [position] entra na chave: dois "12 de outubro" de anos diferentes não repetem a chave. */
+    data class Day(val label: String, val position: Int) : ChatItem { override val key get() = "day-$position-$label" }
+    data class Bubble(val message: Message) : ChatItem { override val key get() = message.id }
+}
+
+/**
+ * Uma conversa aberta (referência "UX/UI Design Squad"): voltar, nome e status no topo,
+ * separadores de dia, balões e o campo de mensagem.
+ * Conversas antigas (de um aparelho que não está conectado) abrem só para leitura.
+ */
 @Composable
-internal fun ChatTab(session: CommunicatorSession, c: CommColors, onOpenInfo: () -> Unit) {
-    val connected = session.connectionState == ConnectionState.CONNECTED
+internal fun ChatDetail(
+    session: CommunicatorSession,
+    conversationId: String,
+    c: CommColors,
+    onBack: () -> Unit,
+    onOpenInfo: () -> Unit,
+) {
+    val conversation = session.conversation(conversationId)
+    val messages = session.messagesOf(conversationId)
+    val isActive = conversationId == session.activeConversationId
+    val canWrite = session.canWriteTo(conversationId)
     val listState = rememberLazyListState()
 
-    // Rola para a última mensagem quando chega ou sai uma nova.
-    LaunchedEffect(session.messages.size) {
-        if (session.messages.isNotEmpty()) listState.animateScrollToItem(session.messages.lastIndex)
+    val items = remember(messages.toList()) {
+        buildList<ChatItem> {
+            var lastDay = ""
+            messages.forEach { m ->
+                val day = dayLabel(m.timestamp)
+                if (day != lastDay) { add(ChatItem.Day(day, size)); lastDay = day }
+                add(ChatItem.Bubble(m))
+            }
+        }
+    }
+
+    // Rola para a última mensagem e marca como lida quando chega ou sai uma nova.
+    LaunchedEffect(conversationId, messages.size) {
+        if (items.isNotEmpty()) listState.animateScrollToItem(items.lastIndex)
+        session.markRead(conversationId)
     }
 
     Column(Modifier.fillMaxSize()) {
-        ChatHeader(session, c, onOpenInfo)
+        ChatHeader(
+            name = conversation?.peerName ?: session.peerName ?: CommunicatorSession.DEFAULT_PEER,
+            state = if (isActive) session.connectionState else ConnectionState.DISCONNECTED,
+            isActive = isActive,
+            c = c,
+            onBack = onBack,
+            onOpenInfo = onOpenInfo,
+        )
 
-        AnimatedVisibility(visible = !connected) {
-            OfflineBar(session.connectionState, c, onSearch = session::searchAgain)
+        AnimatedVisibility(visible = !canWrite) {
+            if (isActive) OfflineBar(session.connectionState, c, onSearch = session::searchAgain)
+            else ReadOnlyBar(conversation?.peerName ?: "este aparelho", c, onPair = session::searchAgain)
         }
 
         Box(Modifier.weight(1f).fillMaxWidth()) {
-            if (session.messages.isEmpty()) {
+            if (messages.isEmpty()) {
                 EmptyChat(c, Modifier.align(Alignment.Center))
             } else {
                 LazyColumn(
@@ -80,35 +125,59 @@ internal fun ChatTab(session: CommunicatorSession, c: CommColors, onOpenInfo: ()
                     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
-                    items(session.messages, key = { it.id }) { message ->
-                        // Entrada/remoção suave de cada balão (sobe 12 dp e aparece).
+                    items(items, key = { it.key }) { item ->
                         Box(Modifier.animateItem()) {
-                            MessageBubble(message, session.progress[message.id], c)
+                            when (item) {
+                                is ChatItem.Day -> DaySeparator(item.label, c)
+                                is ChatItem.Bubble -> MessageBubble(item.message, session.progress[item.message.id], c)
+                            }
                         }
                     }
                 }
             }
         }
 
-        MessageInput(enabled = connected, c = c, onSend = session::send)
+        if (isActive) MessageInput(enabled = canWrite, c = c, onSend = session::send)
     }
 }
 
 @Composable
-private fun ChatHeader(session: CommunicatorSession, c: CommColors, onOpenInfo: () -> Unit) {
-    val state = session.connectionState
-    val name = session.peerName ?: CommunicatorSession.DEFAULT_PEER
+private fun ChatHeader(
+    name: String,
+    state: ConnectionState,
+    isActive: Boolean,
+    c: CommColors,
+    onBack: () -> Unit,
+    onOpenInfo: () -> Unit,
+) {
     Row(
-        Modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
+        Modifier.fillMaxWidth().padding(start = 12.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Avatar(name, 44.dp, c, statusColor = connectionDotColor(state, c))
+        // Voltar num quadrado arredondado (referência).
+        Box(
+            Modifier
+                .size(48.dp)
+                .clip(RoundedCornerShape(16.dp))
+                .background(c.surface)
+                .border(1.dp, c.border, RoundedCornerShape(16.dp))
+                .clickable(role = Role.Button, onClickLabel = "Voltar para as conversas", onClick = onBack),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = "Voltar", tint = c.onSurface)
+        }
+        Spacer(Modifier.width(12.dp))
+        PeerAvatar(name, 44.dp, c, online = isActive && state == ConnectionState.CONNECTED)
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f).semantics(mergeDescendants = true) {}) {
-            Text(name, color = c.onSurface, maxLines = 1,
-                style = MaterialTheme.typography.titleMedium.copy(fontSize = 18.sp, lineHeight = 24.sp, fontWeight = FontWeight.Bold))
+            Text(name, color = c.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                style = MaterialTheme.typography.titleMedium.copy(fontSize = 17.sp, lineHeight = 22.sp, fontWeight = FontWeight.Bold))
             AnimatedContent(
-                targetState = if (state == ConnectionState.CONNECTED) "Conectado" else connectionLabel(state, null),
+                targetState = when {
+                    !isActive -> "Histórico"
+                    state == ConnectionState.CONNECTED -> "Conectado"
+                    else -> connectionLabel(state, null)
+                },
                 transitionSpec = { textSwapTransition() },
                 label = "headerStatus",
             ) { t ->
@@ -117,6 +186,38 @@ private fun ChatHeader(session: CommunicatorSession, c: CommColors, onOpenInfo: 
         }
         IconButton(onClick = onOpenInfo) {
             Icon(Icons.Default.Info, contentDescription = "Sobre o ConTato e matriz Braille", tint = c.onSurface)
+        }
+    }
+}
+
+@Composable
+private fun DaySeparator(label: String, c: CommColors) {
+    Box(Modifier.fillMaxWidth().padding(vertical = 4.dp), contentAlignment = Alignment.Center) {
+        Text(label, color = c.muted, modifier = Modifier.semantics { heading() },
+            style = MaterialTheme.typography.labelLarge.copy(fontSize = 13.sp, fontWeight = FontWeight.Medium))
+    }
+}
+
+/** Conversa antiga: avisa que para responder é preciso conectar com aquele aparelho. */
+@Composable
+private fun ReadOnlyBar(peer: String, c: CommColors, onPair: () -> Unit) {
+    Row(
+        Modifier
+            .padding(horizontal = 16.dp, vertical = 4.dp)
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(c.accentSoft)
+            .padding(start = 14.dp, end = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            "Para continuar, conecte de novo com $peer.",
+            color = c.onSurface,
+            modifier = Modifier.weight(1f).padding(vertical = 10.dp),
+            style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp, lineHeight = 18.sp),
+        )
+        TextButton(onClick = onPair, modifier = Modifier.heightIn(min = 48.dp)) {
+            Text("Parear", color = c.accent, fontWeight = FontWeight.Bold)
         }
     }
 }
@@ -154,7 +255,7 @@ private fun OfflineBar(state: ConnectionState, c: CommColors, onSearch: () -> Un
 private fun EmptyChat(c: CommColors, modifier: Modifier) {
     Column(modifier.padding(horizontal = 40.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Box(Modifier.size(64.dp).clip(CircleShape).background(c.accent.copy(alpha = 0.12f)), contentAlignment = Alignment.Center) {
-            Icon(Icons.Default.Email, null, tint = c.accent, modifier = Modifier.size(28.dp))
+            Icon(ContatoIcons.ChatBubble, null, tint = c.accent, modifier = Modifier.size(28.dp))
         }
         Spacer(Modifier.height(16.dp))
         Text("Nenhuma mensagem ainda", color = c.onSurface,

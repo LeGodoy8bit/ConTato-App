@@ -1,14 +1,13 @@
 package contato.app.domain.repository
 
-import contato.app.domain.model.Message
+import contato.app.domain.model.Conversation
 
 /**
- * Guarda as conversas entre uma sessão e outra (opcional, controlado pelo usuário).
- * A implementação local fica em data/; uma versão em nuvem (Firebase) pode
- * implementar o mesmo contrato depois, sem mudar as telas.
+ * Guarda as conversas no próprio aparelho (opcional, controlado pelo usuário).
+ * A nuvem fica em [CloudConversationRepository]; as duas são juntadas pelo ConversationMerger.
  */
 interface ConversationArchive {
-    fun load(): List<Message>
-    fun save(messages: List<Message>)
+    fun loadAll(): List<Conversation>
+    fun saveAll(conversations: List<Conversation>)
     fun clear()
 }

@@ -2,6 +2,7 @@ package contato.app.core.vibration
 
 import android.content.Context
 import contato.app.domain.model.HapticPulse
+import contato.app.domain.model.HapticTuning
 import contato.app.domain.service.HapticMessageService
 
 /**
@@ -15,6 +16,11 @@ class HapticMessagePlaybackService(context: Context) {
 
     private val hapticMessageService = HapticMessageService()
     private val hapticController = HapticController(context)
+
+    /** Força e ritmo das letras (Ajustes do Surdocego). */
+    var tuning: HapticTuning
+        get() = hapticController.tuning
+        set(value) { hapticController.tuning = value }
 
     /** Repassa um padrão de vibração de sistema para o HapticController. */
     fun playSystemFeedback(pulses: List<HapticPulse>) {

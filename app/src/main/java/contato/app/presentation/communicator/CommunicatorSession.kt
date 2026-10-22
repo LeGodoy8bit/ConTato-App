@@ -1,6 +1,7 @@
 package contato.app.presentation.communicator
 
 import android.content.Context
+import androidx.compose.runtime.derivedStateOf
 import android.os.Handler
 import android.os.Looper
 import androidx.compose.runtime.getValue
@@ -12,6 +13,7 @@ import contato.app.core.config.HapticConfig
 import contato.app.core.connection.NearbyConnectionService
 import contato.app.core.connection.NearbyListener
 import contato.app.core.vibration.HapticMessagePlaybackService
+import contato.app.domain.model.Conversation
 import contato.app.domain.model.Message
 import contato.app.domain.model.MessageStatus
 import contato.app.domain.model.UserMode
@@ -19,10 +21,12 @@ import contato.app.domain.model.WireMessage
 import contato.app.domain.repository.CommunicatorProfileRepository
 import contato.app.domain.repository.ConversationArchive
 import contato.app.domain.service.BrailleTextNormalizer
+import contato.app.domain.service.ConversationMerger
 import contato.app.domain.service.WireProtocol
 import contato.app.domain.state.ConnectionState
 import contato.app.domain.state.ConversationState
 import contato.app.domain.state.ConversationStateMachine
+import contato.app.presentation.common.CloudAccount
 import java.util.UUID
 
 /** Em que letra o celular do Surdocego está agora (texto já normalizado: A-Z e espaço). */
@@ -53,6 +57,7 @@ internal class CommunicatorSession(
     context: Context,
     private val profile: CommunicatorProfileRepository,
     private val archive: ConversationArchive,
+    val account: CloudAccount,
 ) : NearbyListener {
 
     private val nearby = NearbyConnectionService(context, this)
@@ -76,14 +81,132 @@ internal class CommunicatorSession(
     var hasConnected by mutableStateOf(false)
         private set
 
+    /** Todas as conversas (uma por aparelho), mais recente primeiro. */
+    val conversations = mutableStateListOf<Conversation>()
+
+    /** Conversa do aparelho conectado agora (ou do último conectado). */
+    var activeConversationId by mutableStateOf<String?>(null)
+        private set
+
+    /** Mensagens da conversa ativa, atualizadas ao vivo (status, letra vibrando...). */
     val messages = mutableStateListOf<Message>()
     val progress = mutableStateMapOf<String, PlaybackProgress>()
+
+    /** Total de mensagens não lidas (bolinha na aba Conversas). */
+    val unreadTotal by derivedStateOf { conversations.sumOf { it.unreadCount(UserMode.COMMUNICATOR) } }
 
     private var started = false
     private var autoReconnect = true
 
     init {
-        if (historyEnabled) messages.addAll(archive.load())
+        if (historyEnabled) conversations.addAll(archive.loadAll().sortedByDescending { it.updatedAt })
+        if (account.isSignedIn && historyEnabled) pullCloud(pushAfter = false)
+    }
+
+    // ───────── Conversas ─────────
+
+    fun conversation(id: String): Conversation? = conversations.firstOrNull { it.id == id }
+
+    /** Mensagens para a tela de uma conversa: a ativa vem ao vivo, as outras do histórico. */
+    fun messagesOf(id: String): List<Message> =
+        if (id == activeConversationId) messages else conversation(id)?.messages.orEmpty()
+
+    /** Só dá para escrever na conversa do aparelho que está conectado agora. */
+    fun canWriteTo(id: String): Boolean =
+        id == activeConversationId && connectionState == ConnectionState.CONNECTED
+
+    fun markRead(id: String) {
+        val i = conversations.indexOfFirst { it.id == id }
+        if (i < 0) return
+        val c = conversations[i]
+        val last = c.lastMessage?.timestamp ?: return
+        if (c.lastReadAt >= last) return
+        conversations[i] = c.copy(lastReadAt = last)
+        persist(conversations[i], emptyList())
+    }
+
+    /** Ao conectar: abre (ou cria) a conversa com aquele aparelho. */
+    private fun activateConversationFor(peer: String) {
+        val key = ConversationMerger.peerKey(peer)
+        val existing = conversations.firstOrNull { ConversationMerger.peerKey(it.peerName) == key }
+        val conversation = existing ?: Conversation(
+            id = UUID.randomUUID().toString(),
+            peerName = peer,
+            messages = emptyList(),
+            updatedAt = System.currentTimeMillis(),
+        ).also { conversations.add(0, it) }
+        activeConversationId = conversation.id
+        messages.clear()
+        messages.addAll(conversation.messages)
+        progress.clear()
+    }
+
+    /** Copia a conversa ativa para a lista, salva no aparelho e manda o que mudou para a nuvem. */
+    private fun commitActive(changed: List<Message>) {
+        val id = activeConversationId ?: return
+        val i = conversations.indexOfFirst { it.id == id }
+        if (i < 0) return
+        val updated = conversations[i].copy(
+            messages = messages.toList(),
+            updatedAt = messages.lastOrNull()?.timestamp ?: conversations[i].updatedAt,
+        )
+        conversations.removeAt(i)
+        conversations.add(0, updated)
+        persist(updated, changed)
+    }
+
+    private fun persist(conversation: Conversation, changed: List<Message>) {
+        if (!historyEnabled) return
+        archive.saveAll(conversations.toList())
+        // Status intermediário (letra a letra) não vai para a nuvem: economiza gravações.
+        val relevant = changed.filter { it.status != MessageStatus.PLAYING && it.status != MessageStatus.SENDING }
+        account.push(conversation, relevant)
+    }
+
+    // ───────── Conta (Firebase) ─────────
+
+    /** "Continuar com Google". Ao entrar, junta as conversas do aparelho com as da nuvem. */
+    fun signIn(activityContext: Context) {
+        account.launchSignIn(activityContext) {
+            // Já tinha conta: traz nome e preferências salvos; depois grava o estado atual.
+            account.fetchProfile { cloud ->
+                if (cloud != null) {
+                    if (cloud.displayName.isNotBlank()) rename(cloud.displayName)
+                    cloud.preferences["autoSearch"]?.toBooleanStrictOrNull()?.let { if (it != autoSearchEnabled) setAutoSearch(it) }
+                }
+                syncProfile()
+            }
+            if (!historyEnabled) setHistory(true) // entrar para salvar já liga o "Guardar conversas"
+            pullCloud(pushAfter = true)
+            banner = Banner(BannerKind.SUCCESS, "Conta conectada", "Suas conversas agora ficam salvas na nuvem.")
+        }
+    }
+
+    fun signOut(activityContext: Context) {
+        account.launchSignOut(activityContext) {
+            banner = Banner(BannerKind.SUCCESS, "Você saiu da conta", "As conversas continuam neste aparelho.")
+        }
+    }
+
+    private fun pullCloud(pushAfter: Boolean) {
+        account.pull { remote ->
+            val activePeer = conversation(activeConversationId ?: "")?.peerName
+            val merged = ConversationMerger.merge(conversations.toList(), remote)
+            conversations.clear()
+            conversations.addAll(merged)
+            // A conversa ativa pode ter ganhado o id da nuvem e mensagens antigas.
+            if (activePeer != null) {
+                val key = ConversationMerger.peerKey(activePeer)
+                merged.firstOrNull { ConversationMerger.peerKey(it.peerName) == key }?.let { c ->
+                    activeConversationId = c.id
+                    val live = messages.associateBy { it.id }
+                    messages.clear()
+                    messages.addAll(ConversationMerger.mergeMessages(c.messages, live.values.toList()))
+                }
+            }
+            archive.saveAll(merged)
+            if (pushAfter) merged.forEach { account.push(it, it.messages) }
+        }
     }
 
     // ───────── Conexão ─────────
@@ -113,6 +236,7 @@ internal class CommunicatorSession(
 
     /** Fim da Activity. */
     fun release() {
+        account.release()
         started = false
         autoReconnect = false
         handler.removeCallbacksAndMessages(null)
@@ -180,21 +304,22 @@ internal class CommunicatorSession(
         val i = messages.indexOfFirst { it.id == id }
         if (i < 0) return
         messages[i] = messages[i].copy(status = status)
-        persist()
+        commitActive(listOf(messages[i]))
     }
 
     private fun onIncomingText(wire: WireMessage.Text) {
         // A mesma mensagem nunca entra duas vezes (a lista usa o id como chave).
         if (wire.id.isNotEmpty() && messages.any { it.id == wire.id }) return
         conversation.transitionTo(ConversationState.RECEIVING)
-        messages += Message(
+        val incoming = Message(
             id = wire.id.ifEmpty { UUID.randomUUID().toString() },
             content = wire.text,
             sender = UserMode.DEAFBLIND,
             timestamp = System.currentTimeMillis(),
             status = MessageStatus.DELIVERED,
         )
-        persist()
+        messages += incoming
+        commitActive(listOf(incoming))
         conversation.transitionTo(ConversationState.RECEIVED)
         conversation.transitionTo(ConversationState.IDLE)
     }
@@ -218,16 +343,19 @@ internal class CommunicatorSession(
 
     /** Conexão caiu: o que não foi confirmado vira "não enviada"; o que vibrava fica como entregue. */
     private fun markInFlightAfterDisconnect() {
+        val changed = mutableListOf<Message>()
         for (i in messages.indices) {
             val m = messages[i]
-            when (m.status) {
-                MessageStatus.SENDING, MessageStatus.SENT -> messages[i] = m.copy(status = MessageStatus.FAILED)
-                MessageStatus.PLAYING -> messages[i] = m.copy(status = MessageStatus.DELIVERED)
-                else -> Unit
-            }
+            val next = when (m.status) {
+                MessageStatus.SENDING, MessageStatus.SENT -> MessageStatus.FAILED
+                MessageStatus.PLAYING -> MessageStatus.DELIVERED
+                else -> null
+            } ?: continue
+            messages[i] = m.copy(status = next)
+            changed += messages[i]
         }
         progress.clear()
-        persist()
+        if (changed.isNotEmpty()) commitActive(changed)
     }
 
     // ───────── Perfil e preferências ─────────
@@ -237,6 +365,7 @@ internal class CommunicatorSession(
         if (clean.isEmpty()) return
         profile.saveDisplayName(clean)
         displayName = profile.getDisplayName()
+        syncProfile()
         // Se ainda está procurando, recomeça para o celular tátil ver o nome novo.
         if (nearby.getCurrentState() == ConnectionState.SCANNING) {
             nearby.stop()
@@ -253,22 +382,39 @@ internal class CommunicatorSession(
         } else {
             handler.removeCallbacksAndMessages(RECONNECT_TOKEN)
         }
+        syncProfile()
     }
 
     fun setHistory(enabled: Boolean) {
         profile.setHistoryEnabled(enabled)
         historyEnabled = enabled
-        if (enabled) archive.save(messages.toList()) else archive.clear()
+        if (enabled) archive.saveAll(conversations.toList()) else archive.clear()
+        syncProfile()
     }
 
+    /** Nome e preferências do Comunicador na nuvem (só se estiver logado). */
+    private fun syncProfile() {
+        account.saveProfile(
+            displayName,
+            mapOf("historyEnabled" to historyEnabled.toString(), "autoSearch" to autoSearchEnabled.toString()),
+        )
+    }
+
+    /** Apaga tudo deste aparelho e, se estiver logado, também da nuvem. */
     fun clearHistory() {
+        val keepActive = conversation(activeConversationId ?: "")?.copy(messages = emptyList(), lastReadAt = 0L)
         messages.clear()
         progress.clear()
+        conversations.clear()
+        // A conversa com o aparelho conectado continua existindo (vazia), para seguir conversando.
+        if (keepActive != null && connectionState == ConnectionState.CONNECTED) conversations.add(keepActive)
+        else activeConversationId = null
         archive.clear()
-    }
-
-    private fun persist() {
-        if (historyEnabled) archive.save(messages.toList())
+        if (account.isSignedIn) {
+            account.deleteCloudData { ok ->
+                if (!ok) banner = Banner(BannerKind.ERROR, "Nuvem não apagada", "Confira a internet e tente de novo.")
+            }
+        }
     }
 
     // ───────── NearbyListener ─────────
@@ -294,6 +440,7 @@ internal class CommunicatorSession(
         when (state) {
             ConnectionState.CONNECTED -> {
                 peerName = nearby.getConnectedEndpointName()?.takeIf { it.isNotBlank() } ?: DEFAULT_PEER
+                activateConversationFor(peerName ?: DEFAULT_PEER)
                 hasConnected = true
                 autoReconnect = autoSearchEnabled // depois de um pareamento manual, volta à preferência
                 banner = Banner(BannerKind.SUCCESS, "Conectado", "Você está conectado com $peerName.")
