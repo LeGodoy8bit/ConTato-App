@@ -1,5 +1,6 @@
 package contato.app.presentation.deafblind
 
+import android.app.Activity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -53,7 +54,10 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
+import androidx.core.view.WindowCompat
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
@@ -110,6 +114,16 @@ internal fun DeafblindApp(
     }
 
     val colors = remember(session.settings.theme) { dbColors(session.settings.theme) }
+    // Ícones da barra de status escuros no tema claro e claros no alto contraste.
+    val view = LocalView.current
+    SideEffect {
+        (view.context as? Activity)?.window?.let { w ->
+            WindowCompat.getInsetsController(w, view).apply {
+                isAppearanceLightStatusBars = !colors.dark
+                isAppearanceLightNavigationBars = !colors.dark
+            }
+        }
+    }
     var screen by rememberSaveable { mutableStateOf(DbScreen.HOME) }
     // Chegou mensagem com outra tela aberta: volta para a principal, onde ela é mostrada.
     LaunchedEffect(session.isPlaying) {
@@ -158,8 +172,11 @@ internal fun DeafblindApp(
 // ───────────────────────── Tela principal (protótipo) ─────────────────────────
 
 /**
- * Layout do protótipo: topo compacto (status + mensagem), a cela de 6 pontos ocupando
- * o máximo de espaço e, embaixo, a área de gestos.
+ * Layout do protótipo, pensado para o toque:
+ *  - topo bem pequeno (status, mensagem e resposta): é só apoio para quem acompanha;
+ *  - a cela: 6 quadrados grandes, ocupando a maior parte da tela;
+ *  - a área de gestos, larga e discreta;
+ *  - o menu embaixo.
  */
 @Composable
 private fun DeafblindHome(session: DeafblindSession, colors: DbColors, onOpen: (DbScreen) -> Unit) {
@@ -172,100 +189,116 @@ private fun DeafblindHome(session: DeafblindSession, colors: DbColors, onOpen: (
             .statusBarsPadding()
             .navigationBarsPadding(),
     ) {
-        // Área de gestos: cerca de 1/4 da tela, nunca menor que um polegar confortável.
-        val gestureHeight = (maxHeight * 0.24f).coerceIn(150.dp, 260.dp)
+        // Área de gestos: perto de 30% da tela, nunca menor que um polegar confortável.
+        val gestureHeight = (maxHeight * 0.30f).coerceIn(190.dp, 320.dp)
 
         Column(Modifier.fillMaxSize()) {
-            TopBar(session, colors, onMenu = { showMenu = true })
-            MessageStrip(session, colors)
-            ReplyLine(session, colors)
-
-            // Cela: o maior ponto que couber na largura e na altura que sobram.
-            BoxWithConstraints(
-                Modifier.weight(1f).fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                val byWidth = maxWidth / (2f + CELL_COL_GAP)
-                val byHeight = maxHeight / (3f + 2f * CELL_ROW_GAP)
-                val dot = minOf(byWidth, byHeight, 200.dp).coerceAtLeast(48.dp)
-                BrailleCell(
-                    points = session.points,
-                    dotSize = dot,
-                    colors = colors,
-                    dimmed = !session.canCompose,
-                    onToggle = session::togglePoint,
-                )
-            }
-
+            SupportStrip(session, colors)
+            BrailleCell(
+                points = session.points,
+                colors = colors,
+                dimmed = !session.canCompose,
+                onToggle = session::togglePoint,
+                modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp),
+            )
             GestureArea(session, colors, Modifier.height(gestureHeight))
+            BottomMenuBar(colors, unread = session.unreadTotal, onMenu = { showMenu = true })
         }
     }
 
     if (showMenu) {
         MenuSheet(
+            session = session,
             colors = colors,
-            unread = session.unreadTotal,
             onDismiss = { showMenu = false },
             onOpen = { showMenu = false; onOpen(it) },
         )
     }
 }
 
-// ───────────────────────── Topo ─────────────────────────
+// ───────────────────────── Faixa de apoio (pequena) ─────────────────────────
 
+/**
+ * Status, mensagem e resposta numa faixa pequena e discreta.
+ * A pessoa surdocega sente tudo pela vibração; isto é para quem está ajudando acompanhar.
+ */
 @Composable
-private fun TopBar(session: DeafblindSession, colors: DbColors, onMenu: () -> Unit) {
+private fun SupportStrip(session: DeafblindSession, colors: DbColors) {
     val state = session.connectionState
     val connected = state == ConnectionState.CONNECTED
     val reduce = motionReduced()
     val pulse by rememberInfiniteTransition(label = "pulse").animateFloat(
         1f, 0.35f, infiniteRepeatable(tween(700), RepeatMode.Reverse), label = "a",
     )
-    val text = when {
+    val status = when {
         connected -> "Conectado com ${session.peerName ?: "comunicador"}"
-        state == ConnectionState.DISCONNECTED || state == ConnectionState.CONNECTION_ERROR -> "Sem conexão. Procurando"
+        state == ConnectionState.DISCONNECTED || state == ConnectionState.CONNECTION_ERROR -> "Sem conexão · procurando"
         else -> "Procurando o comunicador"
     }
-    Row(
-        Modifier.fillMaxWidth().padding(start = 16.dp, end = 12.dp, top = 8.dp, bottom = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
+    val message = session.message
+    val playing = session.isPlaying
+    val index = session.playingIndex
+
+    Column(
+        Modifier
+            .padding(start = 16.dp, end = 16.dp, top = 6.dp)
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(colors.surface.copy(alpha = 0.7f))
+            .padding(horizontal = 12.dp, vertical = 6.dp)
+            .semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite },
     ) {
-        Row(
-            Modifier
-                .weight(1f)
-                .clip(CircleShape)
-                .background(colors.surface)
-                .border(1.dp, colors.border, CircleShape)
-                .padding(horizontal = 14.dp, vertical = 10.dp)
-                .semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite },
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
             Box(
-                Modifier.size(10.dp).clip(CircleShape)
+                Modifier.size(7.dp).clip(CircleShape)
                     .background((if (connected) colors.online else colors.searching).copy(alpha = if (connected || reduce) 1f else pulse)),
             )
-            Spacer(Modifier.width(10.dp))
-            AnimatedContent(targetState = text, transitionSpec = { textSwap() }, label = "status") { t ->
-                Text(t, color = colors.onBg, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                    style = MaterialTheme.typography.titleSmall.copy(fontSize = 15.sp, fontWeight = FontWeight.SemiBold))
+            Spacer(Modifier.width(6.dp))
+            AnimatedContent(targetState = status, transitionSpec = { textSwap() }, label = "status", modifier = Modifier.weight(1f)) { t ->
+                Text(t, color = colors.muted, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    style = MaterialTheme.typography.labelMedium.copy(fontSize = 12.sp, fontWeight = FontWeight.SemiBold))
+            }
+            if (playing && message != null && index >= 0) {
+                Text("letra ${index + 1}/${message.length}", color = colors.accent,
+                    style = MaterialTheme.typography.labelMedium.copy(fontSize = 12.sp, fontWeight = FontWeight.Bold))
             }
         }
-        Spacer(Modifier.width(10.dp))
-        Box(
-            Modifier
-                .size(52.dp)
-                .clip(CircleShape)
-                .background(colors.surface)
-                .border(1.dp, colors.border, CircleShape)
-                .clickable(role = Role.Button, onClickLabel = "Abrir menu: treino, conversas e ajustes", onClick = onMenu),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(Icons.Default.Menu, contentDescription = "Menu", tint = colors.onBg)
-            if (session.unreadTotal > 0) {
-                Box(Modifier.align(Alignment.TopEnd).padding(10.dp).size(10.dp).clip(CircleShape).background(Color(0xFFFF5A5F)))
+        // Mensagem recebida, com a letra que está vibrando em destaque.
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            SmallLabel("Mensagem", colors)
+            if (message == null) {
+                Text("—", color = colors.muted, style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp))
+            } else {
+                val annotated = buildAnnotatedString {
+                    message.forEachIndexed { i, ch ->
+                        when {
+                            playing && i == index -> withStyle(
+                                SpanStyle(color = colors.highlightFg, background = colors.highlightBg, fontWeight = FontWeight.ExtraBold)
+                            ) { append(if (ch == ' ') '·' else ch) }
+                            playing && i < index -> withStyle(SpanStyle(color = colors.muted)) { append(ch) }
+                            else -> withStyle(SpanStyle(color = colors.onBg)) { append(ch) }
+                        }
+                    }
+                }
+                Text(annotated, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp))
             }
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            SmallLabel("Resposta", colors)
+            Text(
+                if (session.composed.isEmpty()) "—" else "${session.composed}_",
+                color = colors.onBg, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp),
+            )
         }
     }
+}
+
+@Composable
+private fun SmallLabel(text: String, colors: DbColors) {
+    Text(text, color = colors.muted.copy(alpha = 0.8f), modifier = Modifier.width(70.dp),
+        style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp))
 }
 
 /** Troca de texto no lugar (transitions.dev "text states swap"). */
@@ -273,75 +306,29 @@ private fun textSwap() =
     (fadeIn(tween(Motion.QUICK, easing = Motion.InOut)) + slideInVertically(tween(Motion.QUICK)) { it / 4 }) togetherWith
             (fadeOut(tween(Motion.QUICK, easing = Motion.InOut)) + slideOutVertically(tween(Motion.QUICK)) { -it / 4 })
 
-// ───────────────────────── Mensagem recebida (compacta) ─────────────────────────
+// ───────────────────────── Menu embaixo ─────────────────────────
 
 @Composable
-private fun MessageStrip(session: DeafblindSession, colors: DbColors) {
-    val message = session.message
-    val playing = session.isPlaying
-    val index = session.playingIndex
-    val label = when {
-        message == null -> "Aguardando mensagem"
-        playing && index >= 0 -> "Vibrando letra ${index + 1} de ${message.length}"
-        playing -> "Vibrando"
-        else -> "Mensagem recebida"
-    }
-    Column(
-        Modifier
-            .padding(horizontal = 16.dp, vertical = 6.dp)
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(24.dp))
-            .background(colors.surface)
-            .padding(horizontal = 18.dp, vertical = 12.dp),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            AnimatedContent(targetState = label, transitionSpec = { textSwap() }, label = "label", modifier = Modifier.weight(1f)) { l ->
-                Text(l, color = if (playing) colors.accent else colors.muted,
-                    modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
-                    style = MaterialTheme.typography.labelLarge.copy(fontSize = 14.sp, fontWeight = FontWeight.Bold))
-            }
-            if (message != null && !playing) {
-                Row(Modifier.clearAndSetSemantics { }, verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.KeyboardArrowDown, null, tint = colors.muted, modifier = Modifier.size(18.dp))
-                    Text("repetir", color = colors.muted, style = MaterialTheme.typography.labelMedium.copy(fontSize = 12.sp))
+private fun BottomMenuBar(colors: DbColors, unread: Int, onMenu: () -> Unit) {
+    Box(Modifier.fillMaxWidth().padding(bottom = 8.dp), contentAlignment = Alignment.Center) {
+        Row(
+            Modifier
+                .clip(CircleShape)
+                .background(colors.surface)
+                .clickable(role = Role.Button, onClickLabel = "Abrir menu: treino, conversas, ajustes e conta", onClick = onMenu)
+                .heightIn(min = 48.dp)
+                .padding(horizontal = 22.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box {
+                Icon(Icons.Default.Menu, contentDescription = null, tint = colors.onBg, modifier = Modifier.size(22.dp))
+                if (unread > 0) {
+                    Box(Modifier.align(Alignment.TopEnd).offset(x = 3.dp, y = (-2).dp).size(8.dp).clip(CircleShape).background(Color(0xFFFF5A5F)))
                 }
             }
+            Spacer(Modifier.width(10.dp))
+            Text("Menu", color = colors.onBg, style = MaterialTheme.typography.labelLarge.copy(fontSize = 15.sp, fontWeight = FontWeight.Bold))
         }
-        Spacer(Modifier.height(4.dp))
-        if (message == null) {
-            Text("A mensagem aparece aqui e vibra letra por letra.", color = colors.muted,
-                style = MaterialTheme.typography.bodyLarge.copy(fontSize = 16.sp, lineHeight = 22.sp))
-        } else {
-            val annotated = buildAnnotatedString {
-                message.forEachIndexed { i, ch ->
-                    when {
-                        playing && i == index -> withStyle(
-                            SpanStyle(color = colors.highlightFg, background = colors.highlightBg, fontWeight = FontWeight.ExtraBold)
-                        ) { append(if (ch == ' ') '·' else ch) }
-                        playing && i < index -> withStyle(SpanStyle(color = colors.muted)) { append(ch) }
-                        else -> withStyle(SpanStyle(color = colors.onBg)) { append(ch) }
-                    }
-                }
-            }
-            Text(annotated, maxLines = 2, overflow = TextOverflow.Ellipsis,
-                style = MaterialTheme.typography.headlineSmall.copy(fontSize = 24.sp, lineHeight = 32.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp))
-        }
-    }
-}
-
-@Composable
-private fun ReplyLine(session: DeafblindSession, colors: DbColors) {
-    val composed = session.composed
-    Row(
-        Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 4.dp).semantics(mergeDescendants = true) {},
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text("Resposta  ", color = colors.muted, style = MaterialTheme.typography.labelLarge.copy(fontSize = 14.sp, fontWeight = FontWeight.Bold))
-        Text(
-            if (composed.isEmpty()) "—" else "${composed}_",
-            color = colors.onBg, maxLines = 1, overflow = TextOverflow.Ellipsis,
-            style = MaterialTheme.typography.titleLarge.copy(fontSize = 22.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp),
-        )
     }
 }
 
@@ -458,7 +445,7 @@ private fun EchoLine(echo: CommandEcho?, colors: DbColors, modifier: Modifier) {
             Text(
                 e?.text ?: "Área de gestos",
                 color = when {
-                    e == null -> colors.onGesture.copy(alpha = 0.7f)
+                    e == null -> colors.onGesture.copy(alpha = 0.22f)
                     e.ok -> colors.onGesture
                     else -> colors.error
                 },
@@ -473,20 +460,24 @@ private fun EchoLine(echo: CommandEcho?, colors: DbColors, modifier: Modifier) {
 @Composable
 private fun Hint(icon: ImageVector, gesture: String, action: String, colors: DbColors) {
     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.clearAndSetSemantics { }) {
-        Icon(icon, null, tint = colors.onGesture, modifier = Modifier.size(22.dp))
-        Text(gesture, color = colors.onGesture, style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp, fontWeight = FontWeight.Bold))
-        Text(action, color = colors.onGesture.copy(alpha = 0.75f), style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp))
+        // Bem apagado: é lembrete para a pessoa de apoio, não pode competir com o toque.
+        Icon(icon, null, tint = colors.onGesture.copy(alpha = 0.28f), modifier = Modifier.size(20.dp))
+        Text(gesture, color = colors.onGesture.copy(alpha = 0.28f), style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, fontWeight = FontWeight.Bold))
+        Text(action, color = colors.onGesture.copy(alpha = 0.22f), style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp))
     }
 }
 
 // ───────────────────────── Menu ─────────────────────────
 
-/** Menu (bottom sheet): Treino, Conversas e Ajustes, com itens grandes. */
+/** Menu (bottom sheet): Treino, Conversas, Ajustes e a conta, com itens grandes. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun MenuSheet(colors: DbColors, unread: Int, onDismiss: () -> Unit, onOpen: (DbScreen) -> Unit) {
+private fun MenuSheet(session: DeafblindSession, colors: DbColors, onDismiss: () -> Unit, onOpen: (DbScreen) -> Unit) {
     val state = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+    val account = session.account
+    val unread = session.unreadTotal
     fun go(target: DbScreen) {
         scope.launch { state.hide() }.invokeOnCompletion { onOpen(target) }
     }
@@ -494,12 +485,27 @@ private fun MenuSheet(colors: DbColors, unread: Int, onDismiss: () -> Unit, onOp
         Column(Modifier.navigationBarsPadding().padding(start = 16.dp, end = 16.dp, bottom = 24.dp)) {
             Text("Menu", color = colors.onBg, modifier = Modifier.padding(start = 8.dp, bottom = 12.dp).semantics { heading() },
                 style = MaterialTheme.typography.headlineSmall.copy(fontSize = 24.sp, fontWeight = FontWeight.Bold))
-            MenuItem(ContatoIcons.School, "Treino", "Sinta cada letra e pratique na cela", colors) { go(DbScreen.TRAINING) }
+            MenuItem(ContatoIcons.School, "Treino", "Letras, palavras e frases, em módulos", colors) { go(DbScreen.TRAINING) }
             Spacer(Modifier.height(10.dp))
             MenuItem(ContatoIcons.Chat, "Conversas",
-                if (unread > 0) "$unread mensagem(ns) nova(s)" else "Histórico e login na nuvem", colors) { go(DbScreen.CONVERSATIONS) }
+                if (unread > 0) "$unread mensagem(ns) nova(s)" else "Histórico das conversas", colors) { go(DbScreen.CONVERSATIONS) }
             Spacer(Modifier.height(10.dp))
-            MenuItem(Icons.Default.Settings, "Ajustes", "Vibração, tamanho do texto e cores", colors) { go(DbScreen.SETTINGS) }
+            MenuItem(Icons.Default.Settings, "Ajustes", "Vibração, nome do celular, texto e cores", colors) { go(DbScreen.SETTINGS) }
+            Spacer(Modifier.height(10.dp))
+            val user = account.user
+            if (user == null) {
+                MenuItem(
+                    ContatoIcons.Cloud,
+                    if (account.busy) "Entrando..." else "Entrar com Google",
+                    if (account.isConfigured) account.error ?: "Pessoa de apoio: salve conversas e ajustes na nuvem"
+                    else "Disponível em breve",
+                    colors,
+                ) { if (account.isConfigured && !account.busy) session.signIn(context) }
+            } else {
+                MenuItem(ContatoIcons.Cloud, user.name ?: "Conta conectada", "Conversas e ajustes salvos na nuvem", colors) {
+                    go(DbScreen.SETTINGS)
+                }
+            }
         }
     }
 }

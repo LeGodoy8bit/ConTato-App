@@ -20,4 +20,10 @@ sealed interface WireMessage {
 
     /** A vibração da mensagem [id] terminou. */
     data class Played(val id: String) : WireMessage
+
+    /**
+     * Nome de quem está do outro lado (enviado ao conectar e quando o nome muda).
+     * Versões antigas do app ignoram esta mensagem.
+     */
+    data class Profile(val name: String) : WireMessage
 }

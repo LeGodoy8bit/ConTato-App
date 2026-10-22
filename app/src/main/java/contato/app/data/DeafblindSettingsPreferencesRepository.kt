@@ -3,36 +3,27 @@ package contato.app.data
 import android.content.Context
 import contato.app.domain.model.DeafblindSettings
 import contato.app.domain.repository.DeafblindSettingsRepository
+import contato.app.domain.service.DeafblindSettingsCodec
 
+/** Guarda as preferências do Surdocego como texto, com o mesmo formato usado na nuvem. */
 class DeafblindSettingsPreferencesRepository(context: Context) : DeafblindSettingsRepository {
 
     private val preferences =
         context.applicationContext.getSharedPreferences("contato_deafblind_settings", Context.MODE_PRIVATE)
 
     override fun load(): DeafblindSettings {
-        val d = DeafblindSettings()
-        return DeafblindSettings(
-            intensity = enumOr(preferences.getString("intensity", null), d.intensity),
-            speed = enumOr(preferences.getString("speed", null), d.speed),
-            textSize = enumOr(preferences.getString("text_size", null), d.textSize),
-            theme = enumOr(preferences.getString("theme", null), d.theme),
-            showGestureHints = preferences.getBoolean("gesture_hints", d.showGestureHints),
-            saveHistory = preferences.getBoolean("save_history", d.saveHistory),
-        )
+        val all = preferences.all
+        val map = all.mapNotNull { (k, v) -> (v as? String)?.let { k to it } }.toMap().toMutableMap()
+        // Chaves da versão anterior (antes do ajuste personalizado), para ninguém perder o que escolheu.
+        (all["text_size"] as? String)?.let { map.putIfAbsent("textSize", it) }
+        (all["gesture_hints"] as? Boolean)?.let { map.putIfAbsent("gestureHints", it.toString()) }
+        (all["save_history"] as? Boolean)?.let { map.putIfAbsent("saveHistory", it.toString()) }
+        return DeafblindSettingsCodec.fromMap(map, DeafblindSettings())
     }
 
     override fun save(settings: DeafblindSettings) {
-        preferences.edit()
-            .putString("intensity", settings.intensity.name)
-            .putString("speed", settings.speed.name)
-            .putString("text_size", settings.textSize.name)
-            .putString("theme", settings.theme.name)
-            .putBoolean("gesture_hints", settings.showGestureHints)
-            .putBoolean("save_history", settings.saveHistory)
-            .apply()
+        val editor = preferences.edit().clear()
+        DeafblindSettingsCodec.toMap(settings).forEach { (k, v) -> editor.putString(k, v) }
+        editor.apply()
     }
-
-    private inline fun <reified E : Enum<E>> enumOr(name: String?, default: E): E =
-        name?.let { runCatching { enumValueOf<E>(it) }.getOrNull() } ?: default
-
 }

@@ -9,8 +9,6 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
 import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
@@ -166,7 +164,7 @@ private fun NavItem(tab: MainTab, selected: Boolean, c: CommColors, badge: Int, 
     ) {
         Box {
             Icon(tab.icon, contentDescription = null, tint = c.onNav.copy(alpha = if (selected) 1f else 0.75f), modifier = Modifier.size(22.dp))
-            // Bolinha de não lidas: entra com um "pop".
+            // Bolinha de não lidas: entra com um "pop" (transitions.dev "notification badge").
             val badgeScale by animateFloatAsState(
                 targetValue = if (badge > 0) 1f else 0f,
                 animationSpec = tween(

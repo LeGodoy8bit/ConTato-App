@@ -43,12 +43,14 @@ import contato.app.presentation.theme.motionReduced
 
 /**
  * Cores do modo Surdocego.
- * - Claro: igual ao protótipo (fundo branco, ponto marcado azul forte, pontos vazios azul bem claro,
+ * - Claro: igual ao protótipo (fundo branco, ponto marcado azul forte, quadrados azul bem claro,
  *   área de gestos azul claro).
- * - Alto contraste: fundo escuro e branco puro, para baixa visão residual (escolhido nos Ajustes).
+ * - Alto contraste: fundo quase preto e amarelo forte (a combinação mais legível para baixa visão),
+ *   com cinzas azulados suaves no resto, para não cansar a vista.
  */
 internal class DbColors(
     val bg: Color, val surface: Color, val onBg: Color, val muted: Color, val border: Color,
+    val squareOff: Color, val squareOn: Color, val squareBorder: Color,
     val dotOn: Color, val onDotOn: Color, val dotOff: Color, val dotOffBorder: Color, val onDotOff: Color,
     val gesture: Color, val onGesture: Color, val accent: Color, val online: Color, val searching: Color,
     val error: Color, val highlightBg: Color, val highlightFg: Color, val dark: Boolean,
@@ -58,6 +60,7 @@ internal fun dbColors(theme: DeafblindTheme): DbColors = when (theme) {
     DeafblindTheme.LIGHT -> DbColors(
         bg = Color.White, surface = Color(0xFFF3F7FE), onBg = Color(0xFF0E1726), muted = Color(0xFF55627A),
         border = Color(0xFFD6E4FB),
+        squareOff = Color(0xFFF4F8FF), squareOn = Color(0xFFDCE8FF), squareBorder = Color(0xFFE1EBFB),
         dotOn = Color(0xFF0062FF), onDotOn = Color.White, dotOff = Color(0xFFE4EEFD), dotOffBorder = Color(0xFFCFE0FB),
         onDotOff = Color(0xFF7D93B8),
         gesture = Color(0xFFCCE0FC), onGesture = Color(0xFF0B2A5B), accent = Color(0xFF0062FF),
@@ -65,13 +68,14 @@ internal fun dbColors(theme: DeafblindTheme): DbColors = when (theme) {
         highlightBg = Color(0xFF0062FF), highlightFg = Color.White, dark = false,
     )
     DeafblindTheme.HIGH_CONTRAST -> DbColors(
-        bg = Color(0xFF0D1420), surface = Color(0xFF1A2333), onBg = Color.White, muted = Color(0xFFB4C0D3),
-        border = Color(0xFF2C3850),
-        dotOn = Color.White, onDotOn = Color(0xFF0D1420), dotOff = Color(0xFF1A2333), dotOffBorder = Color.White,
-        onDotOff = Color.White,
-        gesture = Color(0xFF1F3A7A), onGesture = Color.White, accent = Color(0xFF5C97FF),
-        online = Color(0xFF4CC26A), searching = Color(0xFFF2C14E), error = Color(0xFFF2B8B5),
-        highlightBg = Color.White, highlightFg = Color(0xFF0D1420), dark = true,
+        bg = Color(0xFF0B0F19), surface = Color(0xFF161C2B), onBg = Color.White, muted = Color(0xFFA9B4C8),
+        border = Color(0xFF2A3347),
+        squareOff = Color(0xFF131926), squareOn = Color(0xFF2A2512), squareBorder = Color(0xFF232B3D),
+        dotOn = Color(0xFFFFD84D), onDotOn = Color(0xFF0B0F19), dotOff = Color(0xFF1E2638), dotOffBorder = Color(0xFF4A5670),
+        onDotOff = Color(0xFFC9D2E3),
+        gesture = Color(0xFF1A2236), onGesture = Color.White, accent = Color(0xFFFFD84D),
+        online = Color(0xFF5BD17A), searching = Color(0xFFFFB547), error = Color(0xFFFF8A80),
+        highlightBg = Color(0xFFFFD84D), highlightFg = Color(0xFF0B0F19), dark = true,
     )
 }
 
@@ -79,53 +83,52 @@ internal fun dbColors(theme: DeafblindTheme): DbColors = when (theme) {
 
 /**
  * Os 6 pontos na posição real da cela (1 2 3 na coluna da esquerda, 4 5 6 na direita).
- * O tamanho vem de quem chama: na tela principal, o maior que couber.
+ * Cada ponto é um quadrado grande (toda a área é tocável) com o círculo no meio:
+ * a cela ocupa todo o espaço que [modifier] der.
  */
 @Composable
 internal fun BrailleCell(
     points: List<Boolean>,
-    dotSize: Dp,
     colors: DbColors,
     dimmed: Boolean,
     onToggle: (Int) -> Unit,
     modifier: Modifier = Modifier,
+    gap: Dp = 12.dp,
 ) {
-    Row(modifier, horizontalArrangement = Arrangement.Center) {
-        for (col in 0..1) {
-            Column(verticalArrangement = Arrangement.spacedBy(dotSize * CELL_ROW_GAP)) {
-                for (row in 0..2) {
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(gap)) {
+        for (row in 0..2) {
+            Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(gap)) {
+                for (col in 0..1) {
                     val index = col * 3 + row
-                    BrailleDot(index, points[index], dotSize, colors, dimmed) { onToggle(index) }
+                    BrailleSquare(index, points[index], colors, dimmed, Modifier.weight(1f).fillMaxHeight()) { onToggle(index) }
                 }
             }
-            if (col == 0) Spacer(Modifier.width(dotSize * CELL_COL_GAP))
         }
     }
 }
 
-/** Espaços da cela, em proporção do ponto (usados para calcular o maior ponto que cabe). */
-internal const val CELL_ROW_GAP = 0.14f
-internal const val CELL_COL_GAP = 0.2f
-
 @Composable
-private fun BrailleDot(index: Int, active: Boolean, size: Dp, colors: DbColors, dimmed: Boolean, onToggle: () -> Unit) {
+private fun BrailleSquare(index: Int, active: Boolean, colors: DbColors, dimmed: Boolean, modifier: Modifier, onToggle: () -> Unit) {
     val reduce = motionReduced()
+    val square by animateColorAsState(
+        if (active) colors.squareOn else colors.squareOff,
+        animationSpec = if (reduce) snap() else tween(Motion.FAST), label = "square",
+    )
     val fill by animateColorAsState(
         if (active) colors.dotOn else colors.dotOff,
         animationSpec = if (reduce) snap() else tween(Motion.QUICK), label = "fill",
     )
     // Pop ao marcar (transitions.dev: curva com leve quique).
     val scale by animateFloatAsState(
-        if (active) 1f else 0.96f,
+        if (active) 1f else 0.9f,
         animationSpec = if (reduce) snap() else tween(Motion.FAST, easing = Motion.Bounce), label = "scale",
     )
-    Box(
-        Modifier
-            .size(size)
-            .scale(scale)
-            .clip(CircleShape)
-            .background(fill.copy(alpha = if (dimmed && !active) 0.6f else 1f))
-            .border(if (colors.dark) 3.dp else 1.5.dp, if (active) colors.dotOn else colors.dotOffBorder, CircleShape)
+    val shape = RoundedCornerShape(28.dp)
+    BoxWithConstraints(
+        modifier
+            .clip(shape)
+            .background(square.copy(alpha = if (dimmed && !active) 0.7f else 1f))
+            .border(1.dp, if (active) colors.dotOn.copy(alpha = 0.5f) else colors.squareBorder, shape)
             // Sempre tocável: antes da primeira mensagem a sessão responde com a vibração de erro.
             .toggleable(value = active, role = Role.Checkbox, onValueChange = { onToggle() })
             .semantics {
@@ -134,11 +137,22 @@ private fun BrailleDot(index: Int, active: Boolean, size: Dp, colors: DbColors, 
             },
         contentAlignment = Alignment.Center,
     ) {
-        Text(
-            "${index + 1}",
-            color = if (active) colors.onDotOn else colors.onDotOff,
-            style = MaterialTheme.typography.titleLarge.copy(fontSize = (size.value * 0.2f).coerceAtLeast(14f).sp, fontWeight = FontWeight.Bold),
-        )
+        val dot = minOf(maxWidth, maxHeight) * 0.74f
+        Box(
+            Modifier
+                .size(dot)
+                .scale(scale)
+                .clip(CircleShape)
+                .background(fill)
+                .border(if (colors.dark) 2.dp else 1.5.dp, if (active) colors.dotOn else colors.dotOffBorder, CircleShape),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                "${index + 1}",
+                color = (if (active) colors.onDotOn else colors.onDotOff).copy(alpha = 0.7f),
+                style = MaterialTheme.typography.titleLarge.copy(fontSize = (dot.value * 0.18f).coerceIn(14f, 30f).sp, fontWeight = FontWeight.Bold),
+            )
+        }
     }
 }
 
@@ -212,12 +226,12 @@ internal fun DbCard(colors: DbColors, modifier: Modifier = Modifier, content: @C
     )
 }
 
-/** Grupo de opções (uma escolhida), com botões grandes. Leitor de tela anuncia como opções. */
+/** Grupo de opções (uma escolhida, ou nenhuma = personalizado), com botões grandes. Leitor de tela anuncia como opções. */
 @Composable
 internal fun <T> OptionGroup(
     title: String,
     options: List<T>,
-    selected: T,
+    selected: T?,
     label: (T) -> String,
     colors: DbColors,
     onSelect: (T) -> Unit,

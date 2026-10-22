@@ -22,12 +22,14 @@ object WireProtocol {
     private const val TYPE_RECEIVED = "R"
     private const val TYPE_PROGRESS = "P"
     private const val TYPE_PLAYED = "D"
+    private const val TYPE_PROFILE = "N"
 
     fun encode(message: WireMessage): String = when (message) {
         is WireMessage.Text -> join(TYPE_TEXT, message.id, message.text)
         is WireMessage.Received -> join(TYPE_RECEIVED, message.id, "")
         is WireMessage.Progress -> join(TYPE_PROGRESS, message.id, message.index.toString())
         is WireMessage.Played -> join(TYPE_PLAYED, message.id, "")
+        is WireMessage.Profile -> join(TYPE_PROFILE, "", message.name.replace(SEPARATOR, ' ').take(64))
     }
 
     /** Devolve null só para mensagens no formato novo, mas com tipo desconhecido ou corrompidas. */
@@ -44,6 +46,7 @@ object WireProtocol {
             TYPE_RECEIVED -> WireMessage.Received(id)
             TYPE_PROGRESS -> payload.toIntOrNull()?.let { WireMessage.Progress(id, it) }
             TYPE_PLAYED -> WireMessage.Played(id)
+            TYPE_PROFILE -> payload.trim().takeIf { it.isNotEmpty() }?.let { WireMessage.Profile(it) }
             else -> null
         }
     }

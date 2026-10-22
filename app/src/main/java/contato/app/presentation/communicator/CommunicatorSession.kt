@@ -358,6 +358,17 @@ internal class CommunicatorSession(
         if (changed.isNotEmpty()) commitActive(changed)
     }
 
+    /** O celular tátil avisou o nome dele (o que a pessoa de apoio escolheu, ou o da conta Google). */
+    private fun onPeerName(name: String) {
+        peerName = name
+        val id = activeConversationId ?: return
+        val i = conversations.indexOfFirst { it.id == id }
+        if (i >= 0 && conversations[i].peerName != name) {
+            conversations[i] = conversations[i].copy(peerName = name)
+            persist(conversations[i], emptyList())
+        }
+    }
+
     // ───────── Perfil e preferências ─────────
 
     fun rename(name: String) {
@@ -366,6 +377,10 @@ internal class CommunicatorSession(
         profile.saveDisplayName(clean)
         displayName = profile.getDisplayName()
         syncProfile()
+        // Conectado: o celular tátil passa a mostrar o nome novo na hora.
+        if (connectionState == ConnectionState.CONNECTED) {
+            nearby.sendMessage(WireProtocol.encode(WireMessage.Profile(displayName)))
+        }
         // Se ainda está procurando, recomeça para o celular tátil ver o nome novo.
         if (nearby.getCurrentState() == ConnectionState.SCANNING) {
             nearby.stop()
@@ -425,6 +440,7 @@ internal class CommunicatorSession(
             is WireMessage.Received -> onReceived(wire.id)
             is WireMessage.Progress -> onProgress(wire.id, wire.index)
             is WireMessage.Played -> onPlayed(wire.id)
+            is WireMessage.Profile -> onPeerName(wire.name)
             null -> Unit
         }
     }
@@ -441,6 +457,7 @@ internal class CommunicatorSession(
             ConnectionState.CONNECTED -> {
                 peerName = nearby.getConnectedEndpointName()?.takeIf { it.isNotBlank() } ?: DEFAULT_PEER
                 activateConversationFor(peerName ?: DEFAULT_PEER)
+                nearby.sendMessage(WireProtocol.encode(WireMessage.Profile(displayName)))
                 hasConnected = true
                 autoReconnect = autoSearchEnabled // depois de um pareamento manual, volta à preferência
                 banner = Banner(BannerKind.SUCCESS, "Conectado", "Você está conectado com $peerName.")

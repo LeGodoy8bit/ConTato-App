@@ -63,8 +63,11 @@ internal class DeafblindSession(
     private val timelineBuilder = HapticTimelineBuilder()
     private val handler = Handler(Looper.getMainLooper())
 
-    /** Como este celular aparece para o Comunicador: "Celular tátil (modelo)". */
-    private val localName = "${NearbyConnectionService.DEFAULT_DISCOVERY_NAME} (${Build.MODEL.take(18)})"
+    /** Nome padrão deste celular para o Comunicador: "Celular tátil (modelo)". */
+    val defaultName = "${NearbyConnectionService.DEFAULT_DISCOVERY_NAME} (${Build.MODEL.take(18)})"
+
+    /** Como este celular aparece para o Comunicador: o nome escolhido nos Ajustes, ou o padrão. */
+    val localName: String get() = settings.displayName.ifBlank { defaultName }
 
     // ───────── Estado lido pela tela ─────────
     var connectionState by mutableStateOf(ConnectionState.DISCONNECTED)
@@ -114,17 +117,39 @@ internal class DeafblindSession(
 
     // ───────── Ajustes ─────────
 
-    /** Salva e aplica na hora. Mudou a vibração: toca a letra A para a pessoa sentir a diferença. */
+    /** Salva e aplica na hora (a amostra de vibração é tocada pela tela, ver [previewVibration]). */
     fun updateSettings(new: DeafblindSettings) {
         val old = settings
-        settings = new
-        settingsRepository.save(new)
-        playback.tuning = new.tuning
-        if (new.intensity != old.intensity || new.speed != old.speed) playback.play("A")
-        if (new.saveHistory != old.saveHistory) {
-            if (new.saveHistory) archive.saveAll(conversations.toList()) else archive.clear()
+        val next = new.normalized()
+        if (next == old) return
+        settings = next
+        settingsRepository.save(next)
+        playback.tuning = next.tuning
+        if (next.saveHistory != old.saveHistory) {
+            if (next.saveHistory) archive.saveAll(conversations.toList()) else archive.clear()
         }
-        if (new != old) account.saveProfile(localName, DeafblindSettingsCodec.toMap(new))
+        if (next.displayName != old.displayName) announceName()
+        account.saveProfile(localName, DeafblindSettingsCodec.toMap(next))
+    }
+
+    /** Vibra a letra A com a força e o ritmo atuais (ao soltar o controle ou tocar num atalho). */
+    fun previewVibration() {
+        if (!isPlaying) playback.play("A")
+    }
+
+    /**
+     * O nome mudou: conectado, avisa o Comunicador na hora; procurando, recomeça a busca
+     * para o novo nome já aparecer na lista dele.
+     */
+    private fun announceName() {
+        when (connectionState) {
+            ConnectionState.CONNECTED -> nearby.sendMessage(WireProtocol.encode(WireMessage.Profile(localName)))
+            ConnectionState.SCANNING -> if (active && permitted) {
+                nearby.stop()
+                nearby.startDiscovery(localName)
+            }
+            else -> Unit // conectando: o nome novo vai na mensagem Profile assim que conectar
+        }
     }
 
     // ───────── Treino ─────────
@@ -134,6 +159,15 @@ internal class DeafblindSession(
         if (isPlaying) return
         playback.play(letter.toString())
     }
+
+    /** Vibra um texto inteiro (palavras e frases do treino). */
+    fun playText(text: String) {
+        if (isPlaying) return
+        playback.play(text)
+    }
+
+    /** Vibração de comando aceito / recusado (confirmar letra, espaço, apagar no treino). */
+    fun commandFeedback(ok: Boolean) = feedback(if (ok) SystemFeedbackEvent.COMMAND_RECOGNIZED else SystemFeedbackEvent.ERROR)
 
     /** Vibração curta de ponto marcado/desmarcado, para a cela do treino. */
     fun dotFeedback(on: Boolean) = feedback(if (on) SystemFeedbackEvent.DOT_ON else SystemFeedbackEvent.DOT_OFF)
@@ -189,7 +223,12 @@ internal class DeafblindSession(
         account.launchSignIn(activityContext) {
             // Já tinha conta: aplica as preferências salvas (vibração, texto, cores) neste celular.
             account.fetchProfile { cloud ->
-                if (cloud != null) updateSettings(DeafblindSettingsCodec.fromMap(cloud.preferences, settings))
+                var next = if (cloud != null) DeafblindSettingsCodec.fromMap(cloud.preferences, settings) else settings
+                // Sem nome escolhido: usa o primeiro nome da conta Google (ex.: "Ana").
+                if (next.displayName.isBlank()) {
+                    account.user?.name?.substringBefore(' ')?.takeIf { it.isNotBlank() }?.let { next = next.copy(displayName = it) }
+                }
+                updateSettings(next)
                 account.saveProfile(localName, DeafblindSettingsCodec.toMap(settings))
             }
             if (!settings.saveHistory) updateSettings(settings.copy(saveHistory = true))
@@ -432,8 +471,22 @@ internal class DeafblindSession(
     // ───────── NearbyListener ─────────
 
     override fun onMessageReceived(message: String) {
-        val wire = WireProtocol.decode(message)
-        if (wire is WireMessage.Text) onIncomingText(wire)
+        when (val wire = WireProtocol.decode(message)) {
+            is WireMessage.Text -> onIncomingText(wire)
+            is WireMessage.Profile -> onPeerName(wire.name)
+            else -> Unit
+        }
+    }
+
+    /** O Comunicador avisou o nome dele (ao conectar ou depois de trocar). */
+    private fun onPeerName(name: String) {
+        peerName = name
+        val id = activeConversationId ?: return
+        val i = conversations.indexOfFirst { it.id == id }
+        if (i >= 0 && conversations[i].peerName != name) {
+            conversations[i] = conversations[i].copy(peerName = name)
+            persist(conversations[i], emptyList())
+        }
     }
 
     override fun onConnectionStatusChanged(status: String) = Unit
@@ -444,6 +497,7 @@ internal class DeafblindSession(
             ConnectionState.CONNECTED -> {
                 peerName = nearby.getConnectedEndpointName()
                 activateConversationFor(peerName?.takeIf { it.isNotBlank() } ?: DEFAULT_PEER)
+                nearby.sendMessage(WireProtocol.encode(WireMessage.Profile(localName)))
                 modeStateMachine.transitionTo(DeafblindModeState.CONNECTED)
                 modeStateMachine.transitionTo(DeafblindModeState.WAITING_MESSAGE)
             }
