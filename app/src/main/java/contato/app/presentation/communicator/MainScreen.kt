@@ -2,14 +2,12 @@ package contato.app.presentation.communicator
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
@@ -17,9 +15,11 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -45,12 +45,13 @@ import contato.app.presentation.theme.motionReduced
 
 internal enum class MainTab(val label: String, val icon: ImageVector) {
     CHAT("Conversas", ContatoIcons.Chat),
+    CONNECTION("Conexão", ContatoIcons.Sensors),
     PROFILE("Perfil", Icons.Default.Person),
     SETTINGS("Ajustes", Icons.Default.Settings),
 }
 
 /**
- * Tela principal do Comunicador: três abas (Conversas, Perfil, Ajustes) numa barra flutuante.
+ * Tela principal do Comunicador: quatro abas (Conversas, Conexão, Perfil, Ajustes) na barra de baixo.
  * Troca de aba desliza para o lado da aba escolhida (transitions.dev "page side-by-side").
  * A barra some enquanto o teclado está aberto.
  */
@@ -106,7 +107,12 @@ internal fun MainScreen(session: CommunicatorSession, onOpenInfo: (InfoTab) -> U
                         openId = openId,
                         onOpen = { openConversation = it },
                         onOpenInfo = { onOpenInfo(InfoTab.HOW) },
+                        onNewConnection = { tab = MainTab.CONNECTION },
                     )
+                    MainTab.CONNECTION -> ConnectionTab(session, c, onOpenConversation = {
+                        openConversation = it
+                        tab = MainTab.CHAT
+                    })
                     MainTab.PROFILE -> ProfileTab(session, c, onOpenInfo)
                     MainTab.SETTINGS -> SettingsTab(session, c)
                 }
@@ -119,84 +125,73 @@ internal fun MainScreen(session: CommunicatorSession, onOpenInfo: (InfoTab) -> U
     }
 }
 
-// ───────────────────────── Barra inferior flutuante ─────────────────────────
+// ───────────────────────── Barra inferior ─────────────────────────
 
+/**
+ * Barra de baixo (referência de app de mensagens): fundo claro com linha fina em cima,
+ * ícones com nome pequeno; a aba escolhida ganha uma pílula colorida atrás do ícone.
+ */
 @Composable
 private fun BottomBar(selected: MainTab, c: CommColors, unread: Int, onSelect: (MainTab) -> Unit) {
-    Box(
-        Modifier.fillMaxWidth().navigationBarsPadding().padding(top = 8.dp, bottom = 12.dp),
-        contentAlignment = Alignment.Center,
-    ) {
+    Column(Modifier.fillMaxWidth().background(c.surface)) {
+        HorizontalDivider(color = c.border)
         Row(
-            Modifier
-                .clip(CircleShape)
-                .background(c.nav)
-                .padding(6.dp),
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 8.dp, vertical = 6.dp),
+            horizontalArrangement = Arrangement.SpaceAround,
             verticalAlignment = Alignment.CenterVertically,
         ) {
             MainTab.entries.forEach { t ->
-                NavItem(t, selected == t, c, badge = if (t == MainTab.CHAT) unread else 0) { onSelect(t) }
+                NavItem(t, selected == t, c, badge = if (t == MainTab.CHAT) unread else 0, modifier = Modifier.weight(1f)) { onSelect(t) }
             }
         }
     }
 }
 
-/** Aba escolhida mostra ícone + nome numa pílula; as outras, só o ícone. A pílula cresce com animação. */
 @Composable
-private fun NavItem(tab: MainTab, selected: Boolean, c: CommColors, badge: Int, onClick: () -> Unit) {
+private fun NavItem(tab: MainTab, selected: Boolean, c: CommColors, badge: Int, modifier: Modifier, onClick: () -> Unit) {
     val reduce = motionReduced()
-    val bg by animateColorAsState(
-        if (selected) c.sent else Color.Transparent,
-        tween(if (reduce) 0 else Motion.FAST), label = "navBg",
-    )
-    Row(
-        Modifier
-            .clip(CircleShape)
-            .background(bg)
+    val pill by animateColorAsState(if (selected) c.accentSoft else Color.Transparent, tween(if (reduce) 0 else Motion.FAST), label = "navPill")
+    val tint by animateColorAsState(if (selected) c.accent else c.muted, tween(if (reduce) 0 else Motion.FAST), label = "navTint")
+    val pillWidth by animateDpAsState(if (selected) 60.dp else 40.dp, tween(if (reduce) 0 else Motion.FAST, easing = Motion.SmoothOut), label = "navW")
+    Column(
+        modifier
+            .clip(RoundedCornerShape(16.dp))
             .selectable(selected = selected, role = Role.Tab, onClick = onClick)
             .semantics { contentDescription = if (badge > 0) "${tab.label}, $badge não lidas" else tab.label }
-            .heightIn(min = 52.dp)
-            .widthIn(min = 52.dp)
-            .padding(horizontal = 16.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.Center,
+            .padding(vertical = 4.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Box {
-            Icon(tab.icon, contentDescription = null, tint = c.onNav.copy(alpha = if (selected) 1f else 0.75f), modifier = Modifier.size(22.dp))
-            // Bolinha de não lidas: entra com um "pop" (transitions.dev "notification badge").
-            val badgeScale by animateFloatAsState(
-                targetValue = if (badge > 0) 1f else 0f,
-                animationSpec = tween(
-                    if (badge > 0) Motion.VERY_SLOW else Motion.QUICK,
-                    easing = if (badge > 0) Motion.Bounce else Motion.SmoothOut,
-                ),
-                label = "badge",
-            )
-            if (badgeScale > 0.01f) {
-                Box(
-                    Modifier
-                        .align(Alignment.TopEnd)
-                        .offset(x = 4.dp, y = (-3).dp)
-                        .graphicsLayer { scaleX = badgeScale; scaleY = badgeScale }
-                        .size(10.dp)
-                        .clip(CircleShape)
-                        .background(Color(0xFFFF5A5F)),
+        Box(
+            Modifier.width(pillWidth).height(32.dp).clip(CircleShape).background(pill),
+            contentAlignment = Alignment.Center,
+        ) {
+            Box {
+                Icon(tab.icon, contentDescription = null, tint = tint, modifier = Modifier.size(22.dp))
+                // Bolinha de não lidas: entra com um "pop" (transitions.dev "notification badge").
+                val badgeScale by animateFloatAsState(
+                    targetValue = if (badge > 0) 1f else 0f,
+                    animationSpec = tween(
+                        if (badge > 0) Motion.VERY_SLOW else Motion.QUICK,
+                        easing = if (badge > 0) Motion.Bounce else Motion.SmoothOut,
+                    ),
+                    label = "badge",
                 )
+                if (badgeScale > 0.01f) {
+                    Box(
+                        Modifier
+                            .align(Alignment.TopEnd)
+                            .offset(x = 4.dp, y = (-3).dp)
+                            .graphicsLayer { scaleX = badgeScale; scaleY = badgeScale }
+                            .size(10.dp)
+                            .clip(CircleShape)
+                            .background(Color(0xFFFF5A5F)),
+                    )
+                }
             }
         }
-        AnimatedVisibility(
-            visible = selected,
-            enter = expandHorizontally(tween(Motion.FAST, easing = Motion.SmoothOut)) + fadeIn(tween(Motion.FAST)),
-            exit = shrinkHorizontally(tween(Motion.QUICK, easing = Motion.SmoothOut)) + fadeOut(tween(Motion.QUICK)),
-        ) {
-            Text(
-                tab.label,
-                color = c.onNav,
-                modifier = Modifier.padding(start = 8.dp),
-                style = MaterialTheme.typography.labelLarge.copy(fontSize = 15.sp, fontWeight = FontWeight.Bold),
-            )
-        }
+        Spacer(Modifier.height(2.dp))
+        Text(tab.label, color = tint,
+            style = MaterialTheme.typography.labelSmall.copy(fontSize = 12.sp, fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium))
     }
 }
 
@@ -208,6 +203,7 @@ private fun ConversationsHost(
     openId: String?,
     onOpen: (String?) -> Unit,
     onOpenInfo: () -> Unit,
+    onNewConnection: () -> Unit,
 ) {
     val reduce = motionReduced()
     AnimatedContent(
@@ -225,7 +221,7 @@ private fun ConversationsHost(
         label = "conversations",
     ) { id ->
         if (id == null || session.conversation(id) == null) {
-            ConversationsTab(session, c, onOpenConversation = { onOpen(it) }, onOpenInfo = onOpenInfo)
+            ConversationsTab(session, c, onOpenConversation = { onOpen(it) }, onOpenInfo = onOpenInfo, onNewConnection = onNewConnection)
         } else {
             ChatDetail(session, id, c, onBack = { onOpen(null) }, onOpenInfo = onOpenInfo)
         }

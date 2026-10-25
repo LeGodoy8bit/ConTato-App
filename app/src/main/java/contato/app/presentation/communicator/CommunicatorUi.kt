@@ -11,6 +11,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -33,6 +34,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.LiveRegionMode
@@ -116,17 +119,21 @@ internal fun textSwapTransition() =
 // ───────────────────────── Avatar ─────────────────────────
 
 @Composable
-internal fun Avatar(name: String, size: Dp, c: CommColors, statusColor: Color? = null) {
+internal fun Avatar(name: String, size: Dp, c: CommColors, statusColor: Color? = null, photo: ImageBitmap? = null) {
     Box(Modifier.size(size)) {
         Box(
             Modifier.fillMaxSize().clip(CircleShape).background(c.accentSoft),
             contentAlignment = Alignment.Center,
         ) {
-            Text(
-                name.trim().firstOrNull()?.uppercase() ?: "?",
-                color = if (c.dark) Color.White else ContatoBlue,
-                style = MaterialTheme.typography.titleMedium.copy(fontSize = (size.value * 0.42f).sp, fontWeight = FontWeight.Bold),
-            )
+            if (photo != null) {
+                Image(photo, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+            } else {
+                Text(
+                    name.trim().firstOrNull()?.uppercase() ?: "?",
+                    color = if (c.dark) Color.White else ContatoBlue,
+                    style = MaterialTheme.typography.titleMedium.copy(fontSize = (size.value * 0.42f).sp, fontWeight = FontWeight.Bold),
+                )
+            }
         }
         if (statusColor != null) {
             val dot by animateColorAsState(statusColor, tween(Motion.FAST), label = "dot")

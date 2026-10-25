@@ -60,9 +60,9 @@ internal fun dbColors(theme: DeafblindTheme): DbColors = when (theme) {
     DeafblindTheme.LIGHT -> DbColors(
         bg = Color.White, surface = Color(0xFFF3F7FE), onBg = Color(0xFF0E1726), muted = Color(0xFF55627A),
         border = Color(0xFFD6E4FB),
-        squareOff = Color(0xFFF4F8FF), squareOn = Color(0xFFDCE8FF), squareBorder = Color(0xFFE1EBFB),
-        dotOn = Color(0xFF0062FF), onDotOn = Color.White, dotOff = Color(0xFFE4EEFD), dotOffBorder = Color(0xFFCFE0FB),
-        onDotOff = Color(0xFF7D93B8),
+        squareOff = Color(0xFFEDF3FD), squareOn = Color(0xFFD6E4FF), squareBorder = Color(0xFFC9D9F3),
+        dotOn = Color(0xFF0062FF), onDotOn = Color.White, dotOff = Color(0xFFD9E6FB), dotOffBorder = Color(0xFFAFC6EC),
+        onDotOff = Color(0xFF5F78A2),
         gesture = Color(0xFFCCE0FC), onGesture = Color(0xFF0B2A5B), accent = Color(0xFF0062FF),
         online = Color(0xFF1E8E3E), searching = Color(0xFFB7791F), error = Color(0xFFB3261E),
         highlightBg = Color(0xFF0062FF), highlightFg = Color.White, dark = false,

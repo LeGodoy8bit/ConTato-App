@@ -74,7 +74,6 @@ internal fun OnboardingPager(
             }
         }
         HorizontalPager(state = state, modifier = Modifier.weight(1f).fillMaxWidth()) { page ->
-            val offset = ((state.currentPage - page) + state.currentPageOffsetFraction)
             val p = pages[page]
             Column(
                 Modifier.fillMaxSize().padding(horizontal = 28.dp),
@@ -86,6 +85,8 @@ internal fun OnboardingPager(
                         .fillMaxWidth()
                         .graphicsLayer {
                             // Paralaxe: a ilustração anda um pouco mais devagar que o texto.
+                            // Lido aqui dentro (e não na composição) para não redesenhar a página a cada quadro.
+                            val offset = (state.currentPage - page) + state.currentPageOffsetFraction
                             translationX = offset * size.width * 0.25f
                             alpha = 1f - offset.absoluteValue.coerceIn(0f, 1f) * 0.6f
                         },

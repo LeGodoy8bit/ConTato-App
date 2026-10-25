@@ -124,7 +124,7 @@ private fun TrainingIntro(colors: DbColors, onDone: () -> Unit) {
         OnboardingPage(
             "Vamos treinar juntos",
             "O treino ensina a sentir o Braille pela vibração, no ritmo da pessoa. Você, pessoa de apoio, acompanha pela tela.",
-        ) { Mascot(180.dp, colors.dotOn) },
+        ) { Mascot(180.dp, mood = MascotMood.HAPPY) },
         OnboardingPage(
             "Forte é ponto, fraco é liso",
             "Cada letra vibra os 6 pontos em ordem, de 1 a 6. Vibração forte: ponto em relevo. Vibração fraca: ponto liso.",
@@ -132,7 +132,7 @@ private fun TrainingIntro(colors: DbColors, onDone: () -> Unit) {
         OnboardingPage(
             "Responda na cela",
             "Depois de sentir, a pessoa marca os pontos nos quadrados e confere. Acerto e erro têm vibrações diferentes.",
-        ) { Mascot(170.dp, colors.dotOn, mood = MascotMood.THINKING) },
+        ) { Mascot(170.dp, mood = MascotMood.FOCUSED) },
         OnboardingPage(
             "Três módulos",
             "Primeiro as letras, depois palavras e, por fim, frases. O progresso fica salvo neste celular.",
@@ -228,7 +228,7 @@ private fun ModuleList(
                 Modifier.fillMaxWidth().clip(RoundedCornerShape(28.dp)).background(colors.surface).padding(16.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Mascot(84.dp, colors.dotOn)
+                Mascot(84.dp, mood = MascotMood.CURIOUS)
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
                     Text("Escolha um módulo", color = colors.onBg,
@@ -505,7 +505,7 @@ private fun ResultStep(correct: Boolean, item: String, given: String, colors: Db
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Spacer(Modifier.height(20.dp))
-        Mascot(160.dp, if (correct) colors.online else colors.dotOn, mood = if (correct) MascotMood.CELEBRATING else MascotMood.THINKING)
+        Mascot(160.dp, mood = if (correct) MascotMood.EXCITED else MascotMood.CURIOUS)
         Spacer(Modifier.height(16.dp))
         Text(
             if (correct) "Acertou!" else "Quase!",
@@ -537,7 +537,7 @@ private fun DoneStep(module: TrainingModule, colors: DbColors, onBack: () -> Uni
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
-        Mascot(180.dp, colors.online, mood = MascotMood.CELEBRATING)
+        Mascot(180.dp, mood = MascotMood.EXCITED)
         Spacer(Modifier.height(16.dp))
         Text("Módulo ${module.number} concluído!", color = colors.onBg, textAlign = TextAlign.Center,
             style = MaterialTheme.typography.headlineMedium.copy(fontSize = 28.sp, fontWeight = FontWeight.Bold))

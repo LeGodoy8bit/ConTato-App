@@ -1,6 +1,11 @@
 package contato.app.presentation.communicator
 
 import android.content.Context
+import android.net.Uri
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
+import contato.app.data.ProfilePhotoStore
+import contato.app.domain.model.MessageStyle
 import androidx.compose.runtime.derivedStateOf
 import android.os.Handler
 import android.os.Looper
@@ -9,7 +14,16 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import contato.app.core.ai.LlamaTextSimplifier
 import contato.app.core.config.HapticConfig
+import contato.app.domain.repository.AiStatus
+import contato.app.domain.repository.SimplifyResult
+import contato.app.domain.repository.TextSimplifier
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 import contato.app.core.connection.NearbyConnectionService
 import contato.app.core.connection.NearbyListener
 import contato.app.core.vibration.HapticMessagePlaybackService
@@ -21,6 +35,7 @@ import contato.app.domain.model.WireMessage
 import contato.app.domain.repository.CommunicatorProfileRepository
 import contato.app.domain.repository.ConversationArchive
 import contato.app.domain.service.BrailleTextNormalizer
+import contato.app.domain.service.SimplificationRules
 import contato.app.domain.service.ConversationMerger
 import contato.app.domain.service.WireProtocol
 import contato.app.domain.state.ConnectionState
@@ -77,6 +92,15 @@ internal class CommunicatorSession(
         private set
     var banner by mutableStateOf<Banner?>(null)
 
+    /** Cor dos balões, tamanho do texto e horários (Ajustes → Estilo das mensagens). */
+    var messageStyle by mutableStateOf(profile.getMessageStyle())
+        private set
+
+    /** Foto de perfil (só neste celular). */
+    var photo by mutableStateOf<ImageBitmap?>(null)
+        private set
+    private val photoStore = ProfilePhotoStore(context)
+
     /** Já conectou alguma vez nesta sessão? (para não voltar à tela de conexão sozinho). */
     var hasConnected by mutableStateOf(false)
         private set
@@ -98,10 +122,50 @@ internal class CommunicatorSession(
     private var started = false
     private var autoReconnect = true
 
+    // ───────── IA (simplificação no próprio celular) ─────────
+
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private val simplifier: TextSimplifier = LlamaTextSimplifier.get(context)
+
+    /** Preferência "Simplificar mensagens com IA". */
+    var aiEnabled by mutableStateOf(profile.isAiEnabled())
+        private set
+    var aiStatus by mutableStateOf(AiStatus.OFF)
+        private set
+
     init {
+        loadPhotoInBackground()
         if (historyEnabled) conversations.addAll(archive.loadAll().sortedByDescending { it.updatedAt })
         if (account.isSignedIn && historyEnabled) pullCloud(pushAfter = false)
+        if (aiEnabled) prepareAi()
     }
+
+    fun updateAiEnabled(enabled: Boolean) {
+        aiEnabled = enabled
+        profile.setAiEnabled(enabled)
+        if (enabled) prepareAi() else {
+            simplifier.unload()
+            aiStatus = AiStatus.OFF
+        }
+    }
+
+    private fun prepareAi() {
+        if (aiStatus == AiStatus.PREPARING || aiStatus == AiStatus.READY) return
+        aiStatus = AiStatus.PREPARING
+        scope.launch {
+            val result = simplifier.prepare()
+            // Se desligaram enquanto carregava, solta o modelo de novo.
+            if (aiEnabled) aiStatus = result else simplifier.unload()
+        }
+    }
+
+    /** Se a IA está pronta e a frase é longa o bastante para valer a pena. */
+    fun canSimplify(text: String): Boolean =
+        aiEnabled && aiStatus == AiStatus.READY && SimplificationRules.shouldSimplify(text)
+
+    /** Pede à IA uma versão mais curta (sem ganho, erro e demora vêm como NoGain/Failed). */
+    suspend fun simplify(text: String): SimplifyResult =
+        if (aiStatus == AiStatus.READY) simplifier.simplify(text) else SimplifyResult.Failed
 
     // ───────── Conversas ─────────
 
@@ -236,6 +300,8 @@ internal class CommunicatorSession(
 
     /** Fim da Activity. */
     fun release() {
+        scope.cancel()
+        simplifier.unload() // solta a memória do modelo (~300 MB) ao sair
         account.release()
         started = false
         autoReconnect = false
@@ -370,6 +436,39 @@ internal class CommunicatorSession(
     }
 
     // ───────── Perfil e preferências ─────────
+
+    fun updateMessageStyle(style: MessageStyle) {
+        messageStyle = style
+        profile.saveMessageStyle(style)
+    }
+
+    /** Foto escolhida na galeria: reduz e guarda fora da thread principal. */
+    fun setPhoto(uri: Uri) {
+        val version = ++photoVersion
+        Thread {
+            val bitmap = photoStore.save(uri)
+            handler.post {
+                if (version != photoVersion) return@post // removida ou trocada enquanto salvava
+                if (bitmap != null) photo = bitmap.asImageBitmap()
+                else banner = Banner(BannerKind.ERROR, "Foto não carregada", "Tente outra imagem.")
+            }
+        }.start()
+    }
+
+    fun removePhoto() {
+        photoVersion++
+        photo = null
+        Thread { photoStore.delete() }.start()
+    }
+
+    private var photoVersion = 0
+
+    private fun loadPhotoInBackground() {
+        Thread {
+            val bitmap = photoStore.load()
+            if (bitmap != null) handler.post { photo = bitmap.asImageBitmap() }
+        }.start()
+    }
 
     fun rename(name: String) {
         val clean = name.trim()

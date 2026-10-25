@@ -17,13 +17,19 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
@@ -31,7 +37,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -41,15 +49,27 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import contato.app.domain.model.Message
 import contato.app.domain.model.MessageStatus
+import contato.app.domain.model.MessageStyle
 import contato.app.domain.model.UserMode
 import contato.app.domain.state.ConnectionState
+import contato.app.domain.service.SimplificationRules
+import contato.app.domain.repository.SimplifyResult
+import contato.app.presentation.theme.Motion
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
+import androidx.compose.animation.core.tween
+import contato.app.presentation.common.Mascot
+import contato.app.presentation.common.MascotMood
 import contato.app.presentation.theme.ContatoIcons
+import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -65,8 +85,9 @@ private sealed interface ChatItem {
 }
 
 /**
- * Uma conversa aberta (referência "UX/UI Design Squad"): voltar, nome e status no topo,
- * separadores de dia, balões e o campo de mensagem.
+ * Uma conversa aberta (referência de chat): voltar e nome no topo, "Hoje" numa etiqueta,
+ * balões com hora e vistos embaixo, campo com "+" (frases rápidas) e botão de enviar redondo.
+ * Cor dos balões e tamanho do texto vêm de Ajustes → Estilo das mensagens.
  * Conversas antigas (de um aparelho que não está conectado) abrem só para leitura.
  */
 @Composable
@@ -82,6 +103,7 @@ internal fun ChatDetail(
     val isActive = conversationId == session.activeConversationId
     val canWrite = session.canWriteTo(conversationId)
     val listState = rememberLazyListState()
+    val style = session.messageStyle
 
     val items = remember(messages.toList()) {
         buildList<ChatItem> {
@@ -115,7 +137,7 @@ internal fun ChatDetail(
             else ReadOnlyBar(conversation?.peerName ?: "este aparelho", c, onPair = session::searchAgain)
         }
 
-        Box(Modifier.weight(1f).fillMaxWidth()) {
+        Box(Modifier.weight(1f).fillMaxWidth().background(c.bg)) {
             if (messages.isEmpty()) {
                 EmptyChat(c, Modifier.align(Alignment.Center))
             } else {
@@ -123,13 +145,13 @@ internal fun ChatDetail(
                     state = listState,
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     items(items, key = { it.key }) { item ->
                         Box(Modifier.animateItem()) {
                             when (item) {
                                 is ChatItem.Day -> DaySeparator(item.label, c)
-                                is ChatItem.Bubble -> MessageBubble(item.message, session.progress[item.message.id], c)
+                                is ChatItem.Bubble -> MessageBubble(item.message, session.progress[item.message.id], c, style)
                             }
                         }
                     }
@@ -137,7 +159,10 @@ internal fun ChatDetail(
             }
         }
 
-        if (isActive) MessageInput(enabled = canWrite, c = c, onSend = session::send)
+        if (isActive) MessageInput(
+            enabled = canWrite, c = c, style = style, onSend = session::send,
+            canSimplify = session::canSimplify, onSimplify = session::simplify,
+        )
     }
 }
 
@@ -150,75 +175,64 @@ private fun ChatHeader(
     onBack: () -> Unit,
     onOpenInfo: () -> Unit,
 ) {
-    Row(
-        Modifier.fillMaxWidth().padding(start = 12.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        // Voltar num quadrado arredondado (referência).
-        Box(
-            Modifier
-                .size(48.dp)
-                .clip(RoundedCornerShape(16.dp))
-                .background(c.surface)
-                .border(1.dp, c.border, RoundedCornerShape(16.dp))
-                .clickable(role = Role.Button, onClickLabel = "Voltar para as conversas", onClick = onBack),
-            contentAlignment = Alignment.Center,
+    Column(Modifier.fillMaxWidth().background(c.surface)) {
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = "Voltar", tint = c.onSurface)
-        }
-        Spacer(Modifier.width(12.dp))
-        PeerAvatar(name, 44.dp, c, online = isActive && state == ConnectionState.CONNECTED)
-        Spacer(Modifier.width(12.dp))
-        Column(Modifier.weight(1f).semantics(mergeDescendants = true) {}) {
-            Text(name, color = c.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                style = MaterialTheme.typography.titleMedium.copy(fontSize = 17.sp, lineHeight = 22.sp, fontWeight = FontWeight.Bold))
-            AnimatedContent(
-                targetState = when {
-                    !isActive -> "Histórico"
-                    state == ConnectionState.CONNECTED -> "Conectado"
-                    else -> connectionLabel(state, null)
-                },
-                transitionSpec = { textSwapTransition() },
-                label = "headerStatus",
-            ) { t ->
-                Text(t, color = c.muted, style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp, lineHeight = 18.sp))
+            CircleButton(Icons.AutoMirrored.Filled.KeyboardArrowLeft, "Voltar para as conversas", c, onClick = onBack)
+            Spacer(Modifier.width(10.dp))
+            PeerAvatar(name, 42.dp, c, online = isActive && state == ConnectionState.CONNECTED)
+            Spacer(Modifier.width(10.dp))
+            Column(Modifier.weight(1f).semantics(mergeDescendants = true) {}) {
+                Text(name, color = c.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    style = MaterialTheme.typography.titleMedium.copy(fontSize = 17.sp, lineHeight = 22.sp, fontWeight = FontWeight.Bold))
+                AnimatedContent(
+                    targetState = when {
+                        !isActive -> "Histórico"
+                        state == ConnectionState.CONNECTED -> "Conectado"
+                        else -> connectionLabel(state, null)
+                    },
+                    transitionSpec = { textSwapTransition() },
+                    label = "headerStatus",
+                ) { t ->
+                    Text(t, color = if (t == "Conectado") c.online else c.muted,
+                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp, lineHeight = 18.sp))
+                }
             }
+            CircleButton(Icons.Default.Info, "Como funciona e matriz Braille", c, onClick = onOpenInfo)
         }
-        IconButton(onClick = onOpenInfo) {
-            Icon(Icons.Default.Info, contentDescription = "Sobre o ConTato e matriz Braille", tint = c.onSurface)
-        }
+        androidx.compose.material3.HorizontalDivider(color = c.border)
     }
 }
 
+@Composable
+private fun CircleButton(icon: ImageVector, label: String, c: CommColors, onClick: () -> Unit) {
+    Box(
+        Modifier
+            .size(44.dp)
+            .clip(CircleShape)
+            .border(1.dp, c.border, CircleShape)
+            .clickable(role = Role.Button, onClickLabel = label, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(icon, contentDescription = label, tint = c.onSurface, modifier = Modifier.size(22.dp))
+    }
+}
+
+/** "Hoje" numa etiqueta clara no meio (referência). */
 @Composable
 private fun DaySeparator(label: String, c: CommColors) {
-    Box(Modifier.fillMaxWidth().padding(vertical = 4.dp), contentAlignment = Alignment.Center) {
-        Text(label, color = c.muted, modifier = Modifier.semantics { heading() },
-            style = MaterialTheme.typography.labelLarge.copy(fontSize = 13.sp, fontWeight = FontWeight.Medium))
-    }
-}
-
-/** Conversa antiga: avisa que para responder é preciso conectar com aquele aparelho. */
-@Composable
-private fun ReadOnlyBar(peer: String, c: CommColors, onPair: () -> Unit) {
-    Row(
-        Modifier
-            .padding(horizontal = 16.dp, vertical = 4.dp)
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .background(c.accentSoft)
-            .padding(start = 14.dp, end = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
+    Box(Modifier.fillMaxWidth().padding(vertical = 6.dp), contentAlignment = Alignment.Center) {
         Text(
-            "Para continuar, conecte de novo com $peer.",
-            color = c.onSurface,
-            modifier = Modifier.weight(1f).padding(vertical = 10.dp),
-            style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp, lineHeight = 18.sp),
+            label, color = c.muted,
+            modifier = Modifier
+                .clip(RoundedCornerShape(10.dp))
+                .background(c.surface)
+                .padding(horizontal = 12.dp, vertical = 4.dp)
+                .semantics { heading() },
+            style = MaterialTheme.typography.labelLarge.copy(fontSize = 13.sp, fontWeight = FontWeight.Medium),
         )
-        TextButton(onClick = onPair, modifier = Modifier.heightIn(min = 48.dp)) {
-            Text("Parear", color = c.accent, fontWeight = FontWeight.Bold)
-        }
     }
 }
 
@@ -227,7 +241,7 @@ private fun OfflineBar(state: ConnectionState, c: CommColors, onSearch: () -> Un
     val searching = state != ConnectionState.DISCONNECTED && state != ConnectionState.CONNECTION_ERROR
     Row(
         Modifier
-            .padding(horizontal = 16.dp, vertical = 4.dp)
+            .padding(horizontal = 16.dp, vertical = 6.dp)
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
             .background(c.searching.copy(alpha = 0.14f))
@@ -251,20 +265,42 @@ private fun OfflineBar(state: ConnectionState, c: CommColors, onSearch: () -> Un
     }
 }
 
+/** Conversa antiga: avisa que para responder é preciso conectar com aquele aparelho. */
+@Composable
+private fun ReadOnlyBar(peer: String, c: CommColors, onPair: () -> Unit) {
+    Row(
+        Modifier
+            .padding(horizontal = 16.dp, vertical = 6.dp)
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(c.accentSoft)
+            .padding(start = 14.dp, end = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            "Para continuar, conecte de novo com $peer.",
+            color = c.onSurface,
+            modifier = Modifier.weight(1f).padding(vertical = 10.dp),
+            style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp, lineHeight = 18.sp),
+        )
+        TextButton(onClick = onPair, modifier = Modifier.heightIn(min = 48.dp)) {
+            Text("Parear", color = c.accent, fontWeight = FontWeight.Bold)
+        }
+    }
+}
+
 @Composable
 private fun EmptyChat(c: CommColors, modifier: Modifier) {
     Column(modifier.padding(horizontal = 40.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        Box(Modifier.size(64.dp).clip(CircleShape).background(c.accent.copy(alpha = 0.12f)), contentAlignment = Alignment.Center) {
-            Icon(ContatoIcons.ChatBubble, null, tint = c.accent, modifier = Modifier.size(28.dp))
-        }
-        Spacer(Modifier.height(16.dp))
-        Text("Nenhuma mensagem ainda", color = c.onSurface,
+        Mascot(120.dp, mood = MascotMood.HAPPY)
+        Spacer(Modifier.height(12.dp))
+        Text("Diga oi!", color = c.onSurface,
             style = MaterialTheme.typography.titleMedium.copy(fontSize = 18.sp, fontWeight = FontWeight.Bold))
         Spacer(Modifier.height(6.dp))
         Text(
             "Prefira frases curtas: cada letra leva cerca de 2 segundos para vibrar.",
             color = c.muted,
-            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            textAlign = TextAlign.Center,
             style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp, lineHeight = 20.sp),
         )
     }
@@ -275,62 +311,92 @@ private fun EmptyChat(c: CommColors, modifier: Modifier) {
 private val timeFormat = SimpleDateFormat("HH:mm", Locale.forLanguageTag("pt-BR"))
 
 @Composable
-private fun MessageBubble(message: Message, progress: PlaybackProgress?, c: CommColors) {
+private fun MessageBubble(message: Message, progress: PlaybackProgress?, c: CommColors, style: MessageStyle) {
     val mine = message.sender == UserMode.COMMUNICATOR
     val time = remember(message.timestamp) { timeFormat.format(Date(message.timestamp)) }
-    Column(
-        Modifier.fillMaxWidth(),
-        horizontalAlignment = if (mine) Alignment.End else Alignment.Start,
-    ) {
-        Column(
+    val bubble = if (mine) Color(style.bubble.argb) else c.received
+    val textColor = if (mine) Color.White else c.onReceived
+    val shape = RoundedCornerShape(
+        topStart = 20.dp, topEnd = 20.dp,
+        bottomStart = if (mine) 20.dp else 6.dp,
+        bottomEnd = if (mine) 6.dp else 20.dp,
+    )
+    Column(Modifier.fillMaxWidth(), horizontalAlignment = if (mine) Alignment.End else Alignment.Start) {
+        Box(
             Modifier
                 .widthIn(max = 300.dp)
-                .clip(
-                    RoundedCornerShape(
-                        topStart = 20.dp, topEnd = 20.dp,
-                        bottomStart = if (mine) 20.dp else 6.dp,
-                        bottomEnd = if (mine) 6.dp else 20.dp,
-                    )
-                )
-                .background(if (mine) c.sent else c.received)
-                .then(if (mine || c.dark) Modifier else Modifier.border(1.dp, c.border, RoundedCornerShape(20.dp, 20.dp, 20.dp, 6.dp)))
+                .clip(shape)
+                .background(bubble)
+                .then(if (mine || c.dark) Modifier else Modifier.border(1.dp, c.border, shape))
                 .padding(horizontal = 14.dp, vertical = 10.dp),
         ) {
             // Enquanto vibra, a letra atual fica destacada dentro do próprio balão.
             if (mine && message.status == MessageStatus.PLAYING && progress != null) {
-                ProgressText(progress, c)
+                ProgressText(progress, bubble, style.textSize.sp)
             } else {
-                Text(message.content, color = if (mine) c.onSent else c.onReceived,
-                    style = MaterialTheme.typography.bodyLarge.copy(fontSize = 16.sp, lineHeight = 22.sp))
+                Text(message.content, color = textColor,
+                    style = MaterialTheme.typography.bodyLarge.copy(fontSize = style.textSize.sp.sp, lineHeight = (style.textSize.sp + 6).sp))
             }
-            Text(time, color = (if (mine) c.onSent else c.muted).copy(alpha = 0.8f),
-                style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
-                modifier = Modifier.align(Alignment.End).padding(top = 2.dp))
+        }
+        Spacer(Modifier.height(3.dp))
+        MetaLine(message, progress, mine, time, c, style.showTimes)
+    }
+}
+
+/** Embaixo do balão: hora e, nas suas mensagens, o visto (✓ enviada, ✓✓ recebida, ✓✓ azul sentida). */
+@Composable
+private fun MetaLine(message: Message, progress: PlaybackProgress?, mine: Boolean, time: String, c: CommColors, showTime: Boolean) {
+    val label = statusLabel(message.status, progress)
+    Row(
+        Modifier.padding(horizontal = 4.dp).clearAndSetSemantics {
+            contentDescription = if (mine) "$label${if (showTime) ", $time" else ""}" else time
+        },
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (showTime) {
+            Text(time, color = c.muted, style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp))
         }
         if (mine) {
-            Spacer(Modifier.height(4.dp))
-            StatusChip(message.status, progress, c)
+            Spacer(Modifier.width(6.dp))
+            when (message.status) {
+                MessageStatus.SENDING, MessageStatus.SENT ->
+                    Icon(Icons.Default.Check, null, tint = c.muted, modifier = Modifier.size(14.dp))
+                MessageStatus.DELIVERED ->
+                    Icon(ContatoIcons.DoneAll, null, tint = c.muted, modifier = Modifier.size(15.dp))
+                MessageStatus.PLAYING -> Text(label, color = c.accent,
+                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp, fontWeight = FontWeight.Bold))
+                MessageStatus.PLAYED -> {
+                    Icon(ContatoIcons.DoneAll, null, tint = c.accent, modifier = Modifier.size(15.dp))
+                    Spacer(Modifier.width(3.dp))
+                    Text("Sentida", color = c.accent, style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp, fontWeight = FontWeight.SemiBold))
+                }
+                MessageStatus.FAILED -> {
+                    Icon(Icons.Default.Warning, null, tint = DangerRed, modifier = Modifier.size(14.dp))
+                    Spacer(Modifier.width(3.dp))
+                    Text("Não enviada", color = DangerRed, style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp, fontWeight = FontWeight.SemiBold))
+                }
+            }
         }
     }
 }
 
 /** Texto normalizado com a letra que está vibrando agora em destaque; as já sentidas ficam mais claras. */
 @Composable
-private fun ProgressText(progress: PlaybackProgress, c: CommColors) {
+private fun ProgressText(progress: PlaybackProgress, bubble: Color, textSp: Int) {
     val text = buildAnnotatedString {
         progress.text.forEachIndexed { i, ch ->
             when {
-                i < progress.index -> withStyle(SpanStyle(color = c.onSent.copy(alpha = 0.6f))) { append(ch) }
+                i < progress.index -> withStyle(SpanStyle(color = Color.White.copy(alpha = 0.6f))) { append(ch) }
                 i == progress.index -> withStyle(
-                    SpanStyle(color = c.sent, background = Color.White, fontWeight = FontWeight.Bold)
+                    SpanStyle(color = bubble, background = Color.White, fontWeight = FontWeight.Bold)
                 ) { append(if (ch == ' ') '·' else ch) }
-                else -> withStyle(SpanStyle(color = c.onSent)) { append(ch) }
+                else -> withStyle(SpanStyle(color = Color.White)) { append(ch) }
             }
         }
     }
     Text(
         text,
-        style = MaterialTheme.typography.bodyLarge.copy(fontSize = 17.sp, lineHeight = 24.sp, letterSpacing = 1.sp),
+        style = MaterialTheme.typography.bodyLarge.copy(fontSize = (textSp + 1).sp, lineHeight = (textSp + 8).sp, letterSpacing = 1.sp),
         modifier = Modifier.semantics {
             contentDescription = "Vibrando letra ${progress.index + 1} de ${progress.total}"
         },
@@ -339,31 +405,103 @@ private fun ProgressText(progress: PlaybackProgress, c: CommColors) {
 
 // ───────────────────────── Campo de mensagem ─────────────────────────
 
+/** Frases prontas (botão "+"): ajudam quem está começando a conversar com frases curtas. */
+private val quickPhrases = listOf(
+    "Oi, tudo bem?", "Estou aqui", "Já volto", "Sim", "Não", "Obrigado", "Você está bem?", "Vamos comer?",
+)
+
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun MessageInput(enabled: Boolean, c: CommColors, onSend: (String) -> Boolean) {
+private fun MessageInput(
+    enabled: Boolean,
+    c: CommColors,
+    style: MessageStyle,
+    onSend: (String) -> Boolean,
+    canSimplify: (String) -> Boolean,
+    onSimplify: suspend (String) -> SimplifyResult,
+) {
     var text by rememberSaveable { mutableStateOf("") }
+    // IA: tudo fica preso à frase que gerou; se a pessoa continuar digitando, some sozinho.
+    var simplifyingFor by remember { mutableStateOf<String?>(null) }
+    var lastResult by remember { mutableStateOf<Pair<String, SimplifyResult>?>(null) }
+    var dismissedFor by remember { mutableStateOf<String?>(null) }
+    val aiScope = rememberCoroutineScope()
+    val trimmed = text.trim()
+    val result = lastResult?.takeIf { it.first == trimmed }?.second
+    val panel: AiPanel = when {
+        !enabled -> AiPanel.None
+        simplifyingFor != null -> if (simplifyingFor == trimmed) AiPanel.Thinking else AiPanel.None
+        dismissedFor == trimmed -> AiPanel.None
+        !canSimplify(trimmed) -> AiPanel.None // IA desligada/indisponível ou frase curta
+        result is SimplifyResult.Shorter -> AiPanel.Suggest(AiSuggestion(trimmed, result.text))
+        result == SimplifyResult.NoGain -> AiPanel.Chip("A frase já está curta", active = false)
+        result == SimplifyResult.Failed -> AiPanel.Chip("Não deu certo. Tentar de novo", active = true)
+        else -> AiPanel.Chip("Simplificar com IA", active = true)
+    }
+
+    fun simplify() {
+        val original = trimmed
+        simplifyingFor = original
+        aiScope.launch {
+            try {
+                lastResult = original to onSimplify(original)
+            } finally {
+                simplifyingFor = null
+            }
+        }
+    }
+    var showPhrases by remember { mutableStateOf(false) }
     val canSend = enabled && text.isNotBlank()
     val hasUnsupported = text.any { it.isDigit() || (!it.isLetter() && !it.isWhitespace()) }
+    val sendColor = Color(style.bubble.argb)
 
     fun send() {
         if (canSend && onSend(text)) text = ""
     }
 
-    Column(Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 6.dp, bottom = 8.dp)) {
+    Column(Modifier.fillMaxWidth().background(c.surface).padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 10.dp)) {
         if (hasUnsupported) {
             Text("Números e pontuação não vibram; só as letras serão sentidas.", color = c.muted,
                 style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
                 modifier = Modifier.padding(start = 12.dp, bottom = 4.dp))
         }
+        AnimatedContent(
+            targetState = panel,
+            transitionSpec = { fadeIn(tween(Motion.FAST)) togetherWith fadeOut(tween(Motion.QUICK)) },
+            label = "ia",
+        ) { p ->
+            when (p) {
+                AiPanel.None -> Spacer(Modifier.fillMaxWidth())
+                is AiPanel.Chip -> SimplifyChip(p.label, p.active, c, onClick = ::simplify)
+                AiPanel.Thinking -> AiSuggestionCard(null, loading = true, c = c, onUse = {}, onKeep = {})
+                is AiPanel.Suggest -> AiSuggestionCard(
+                    suggestion = p.suggestion,
+                    loading = false,
+                    c = c,
+                    onUse = { s -> text = s.text; dismissedFor = s.text.trim() },
+                    onKeep = { dismissedFor = trimmed },
+                )
+            }
+        }
         Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                Modifier
+                    .size(44.dp)
+                    .clip(CircleShape)
+                    .border(1.dp, c.border, CircleShape)
+                    .clickable(enabled = enabled, role = Role.Button, onClickLabel = "Frases rápidas") { showPhrases = true },
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(Icons.Default.Add, contentDescription = "Frases rápidas", tint = if (enabled) c.onSurface else c.muted)
+            }
+            Spacer(Modifier.width(8.dp))
             Row(
                 Modifier
                     .weight(1f)
-                    .heightIn(min = 52.dp)
+                    .heightIn(min = 48.dp)
                     .clip(CircleShape)
-                    .background(c.surface)
-                    .border(1.dp, c.border, CircleShape)
-                    .padding(start = 18.dp, end = 14.dp),
+                    .background(if (c.dark) c.bg else Color(0xFFEEF1F6))
+                    .padding(start = 16.dp, end = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Box(Modifier.weight(1f).padding(vertical = 12.dp)) {
@@ -389,14 +527,127 @@ private fun MessageInput(enabled: Boolean, c: CommColors, onSend: (String) -> Bo
             Spacer(Modifier.width(8.dp))
             Box(
                 Modifier
-                    .size(52.dp)
+                    .size(48.dp)
                     .clip(CircleShape)
-                    .background(if (canSend) c.sent else c.border)
+                    .background(if (canSend) sendColor else c.border)
                     .clickable(enabled = canSend, role = Role.Button, onClickLabel = "Enviar mensagem") { send() },
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Enviar",
                     tint = if (canSend) Color.White else c.muted, modifier = Modifier.size(22.dp))
+            }
+        }
+    }
+
+    if (showPhrases) {
+        val sheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        val scope = rememberCoroutineScope()
+        ModalBottomSheet(onDismissRequest = { showPhrases = false }, sheetState = sheet, containerColor = c.surface) {
+            Column(Modifier.navigationBarsPadding().padding(start = 20.dp, end = 20.dp, bottom = 24.dp)) {
+                Text("Frases rápidas", color = c.onSurface, modifier = Modifier.semantics { heading() },
+                    style = MaterialTheme.typography.titleLarge.copy(fontSize = 20.sp, fontWeight = FontWeight.Bold))
+                Text("Toque para colocar no campo. Frases curtas são sentidas mais rápido.", color = c.muted,
+                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp))
+                Spacer(Modifier.height(14.dp))
+                quickPhrases.chunked(2).forEach { row ->
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(bottom = 8.dp)) {
+                        row.forEach { phrase ->
+                            Box(
+                                Modifier
+                                    .weight(1f)
+                                    .heightIn(min = 48.dp)
+                                    .clip(RoundedCornerShape(16.dp))
+                                    .background(c.accentSoft)
+                                    .clickable(role = Role.Button) {
+                                        text = phrase
+                                        scope.launch { sheet.hide() }.invokeOnCompletion { showPhrases = false }
+                                    }
+                                    .padding(horizontal = 12.dp, vertical = 12.dp),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Text(phrase, color = c.onSurface, textAlign = TextAlign.Center,
+                                    style = MaterialTheme.typography.labelLarge.copy(fontSize = 15.sp, fontWeight = FontWeight.SemiBold))
+                            }
+                        }
+                        if (row.size == 1) Spacer(Modifier.weight(1f))
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** Sugestão da IA ligada à frase que a gerou. */
+private data class AiSuggestion(val original: String, val text: String)
+
+/** O que aparece acima do campo de texto por causa da IA. */
+private sealed interface AiPanel {
+    data object None : AiPanel
+    data class Chip(val label: String, val active: Boolean) : AiPanel
+    data object Thinking : AiPanel
+    data class Suggest(val suggestion: AiSuggestion) : AiPanel
+}
+
+/** Botãozinho em pílula acima do campo: "Simplificar com IA". */
+@Composable
+private fun SimplifyChip(label: String, active: Boolean, c: CommColors, onClick: () -> Unit) {
+    Row(
+        Modifier
+            .padding(start = 4.dp, bottom = 8.dp)
+            .heightIn(min = 40.dp)
+            .clip(CircleShape)
+            .background(if (active) c.accentSoft else Color.Transparent)
+            .clickable(enabled = active, role = Role.Button, onClickLabel = "Pedir uma versão mais curta", onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            if (active) Icons.Default.Star else Icons.Default.Check, contentDescription = null,
+            tint = if (active) c.accent else c.muted, modifier = Modifier.size(18.dp),
+        )
+        Spacer(Modifier.width(6.dp))
+        Text(label, color = if (active) c.onSurface else c.muted,
+            style = MaterialTheme.typography.labelLarge.copy(fontSize = 14.sp, fontWeight = FontWeight.SemiBold))
+    }
+}
+
+/** Cartão com a versão sugerida: mostra quantas letras a menos vão vibrar e deixa escolher. */
+@Composable
+private fun AiSuggestionCard(
+    suggestion: AiSuggestion?,
+    loading: Boolean,
+    c: CommColors,
+    onUse: (AiSuggestion) -> Unit,
+    onKeep: () -> Unit,
+) {
+    Column(
+        Modifier
+            .padding(bottom = 8.dp)
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(20.dp))
+            .background(c.accentSoft)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Default.Star, contentDescription = null, tint = c.accent, modifier = Modifier.size(16.dp))
+            Spacer(Modifier.width(6.dp))
+            Text(
+                if (loading || suggestion == null) "Pensando numa versão mais curta…" else "Sugestão da IA",
+                color = c.muted,
+                style = MaterialTheme.typography.labelMedium.copy(fontSize = 12.sp, fontWeight = FontWeight.SemiBold),
+            )
+        }
+        if (suggestion != null && !loading) {
+            Spacer(Modifier.height(6.dp))
+            Text(suggestion.text, color = c.onSurface,
+                style = MaterialTheme.typography.bodyLarge.copy(fontSize = 16.sp, lineHeight = 22.sp, fontWeight = FontWeight.SemiBold))
+            val saved = SimplificationRules.lettersSaved(suggestion.original, suggestion.text)
+            Text("$saved letras a menos para sentir", color = c.muted,
+                style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp))
+            Spacer(Modifier.height(10.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                PillButton("Usar", c, primary = true, modifier = Modifier.weight(1f)) { onUse(suggestion) }
+                PillButton("Manter a minha", c, primary = false, modifier = Modifier.weight(1f), onClick = onKeep)
             }
         }
     }

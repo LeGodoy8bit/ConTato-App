@@ -3,6 +3,7 @@ package contato.app.presentation.communicator
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -11,6 +12,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.filled.AccountCircle
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Lock
@@ -38,6 +40,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
@@ -45,7 +48,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import contato.app.domain.model.BubbleColor
+import contato.app.domain.model.MessageStyle
+import contato.app.domain.model.MessageTextSize
 import contato.app.presentation.theme.ContatoIcons
+import contato.app.domain.repository.AiStatus
 import kotlinx.coroutines.launch
 
 /**
@@ -78,6 +85,10 @@ internal fun SettingsTab(session: CommunicatorSession, c: CommColors) {
             AccountCard(user.name ?: "Sua conta", user.email, c, onSignOut = { confirmSignOut = true })
         }
 
+        // ── Estilo das mensagens ──
+        SectionLabel("Estilo das mensagens", c)
+        MessageStyleCard(session, c)
+
         // ── Preferências ──
         SectionLabel("Preferências", c)
         CommCard(c) {
@@ -92,12 +103,17 @@ internal fun SettingsTab(session: CommunicatorSession, c: CommColors) {
             HorizontalDivider(color = c.border)
             SwitchRow(
                 title = "Simplificar mensagens com IA",
-                subtitle = "Sugere uma versão mais curta antes de enviar.",
-                checked = false,
-                enabled = false,
-                badge = "Em breve",
+                subtitle = aiSubtitle(session.aiEnabled, session.aiStatus),
+                checked = session.aiEnabled,
+                enabled = true,
+                badge = aiBadge(session.aiEnabled, session.aiStatus),
+                badgeTone = when (session.aiStatus) {
+                    AiStatus.READY -> Tone.SUCCESS
+                    AiStatus.PREPARING -> Tone.PROGRESS
+                    else -> Tone.DANGER
+                },
                 c = c,
-                onToggle = {},
+                onToggle = { session.updateAiEnabled(!session.aiEnabled) },
             )
             HorizontalDivider(color = c.border)
             LinkRow(Icons.Default.Delete, "Apagar conversas", null, c, tint = DangerRed) { confirmClear = true }
@@ -311,6 +327,22 @@ private fun Benefit(icon: ImageVector, title: String, body: String, c: CommColor
     }
 }
 
+/** Texto embaixo do botão da IA: explica o que faz e, se ligada, como ela está. */
+private fun aiSubtitle(enabled: Boolean, status: AiStatus): String = when {
+    !enabled -> "Sugere uma versão mais curta antes de enviar. Roda neste celular, sem internet."
+    status == AiStatus.PREPARING -> "Preparando a IA… na primeira vez pode levar alguns segundos."
+    status == AiStatus.READY -> "Pronta. No chat, frases com 5 palavras ou mais mostram o botão Simplificar."
+    status == AiStatus.MISSING_MODEL -> "O arquivo do modelo não foi incluído neste app."
+    else -> "Este celular não conseguiu carregar a IA."
+}
+
+private fun aiBadge(enabled: Boolean, status: AiStatus): String? = when {
+    !enabled -> null
+    status == AiStatus.PREPARING -> "Carregando"
+    status == AiStatus.READY -> "Pronta"
+    else -> "Indisponível"
+}
+
 @Composable
 private fun SwitchRow(
     title: String,
@@ -319,6 +351,7 @@ private fun SwitchRow(
     enabled: Boolean,
     c: CommColors,
     badge: String? = null,
+    badgeTone: Tone = Tone.INFO,
     onToggle: () -> Unit,
 ) {
     Row(
@@ -333,7 +366,7 @@ private fun SwitchRow(
                     style = MaterialTheme.typography.titleSmall.copy(fontSize = 16.sp, lineHeight = 22.sp, fontWeight = FontWeight.SemiBold))
                 if (badge != null) {
                     Spacer(Modifier.width(8.dp))
-                    ToneChip(badge, Tone.INFO, c)
+                    ToneChip(badge, badgeTone, c)
                 }
             }
             Text(subtitle, color = c.muted, style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp, lineHeight = 18.sp))
@@ -344,3 +377,81 @@ private fun SwitchRow(
     }
 }
 
+
+/**
+ * Estilo das mensagens (como em apps de mensagem): prévia de uma conversa,
+ * cor dos seus balões, tamanho do texto e se mostra os horários.
+ */
+@Composable
+private fun MessageStyleCard(session: CommunicatorSession, c: CommColors) {
+    val style = session.messageStyle
+    CommCard(c) {
+        // Prévia ao vivo.
+        Column(
+            Modifier.padding(12.dp).fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(c.bg).padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            PreviewBubble("Oi! Tudo bem?", mine = false, style = style, c = c)
+            PreviewBubble("Tudo ótimo, e você?", mine = true, style = style, c = c)
+            if (style.showTimes) {
+                Text("14:32  ✓✓ Sentida", color = c.accent, modifier = Modifier.align(Alignment.End),
+                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp))
+            }
+        }
+        // Cor.
+        Text("Cor dos seus balões", color = c.onSurface, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+            style = MaterialTheme.typography.titleSmall.copy(fontSize = 15.sp, fontWeight = FontWeight.SemiBold))
+        Row(Modifier.padding(horizontal = 12.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            BubbleColor.entries.forEach { color ->
+                val selected = color == style.bubble
+                Box(
+                    Modifier
+                        .size(48.dp)
+                        .clip(CircleShape)
+                        .border(3.dp, if (selected) Color(color.argb) else Color.Transparent, CircleShape)
+                        .padding(5.dp)
+                        .clip(CircleShape)
+                        .background(Color(color.argb))
+                        .selectable(selected = selected, role = Role.RadioButton) { session.updateMessageStyle(style.copy(bubble = color)) }
+                        .semantics { contentDescription = color.label },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    if (selected) Icon(Icons.Default.Check, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
+                }
+            }
+        }
+        // Tamanho do texto.
+        Text("Tamanho do texto", color = c.onSurface, modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 10.dp, bottom = 6.dp),
+            style = MaterialTheme.typography.titleSmall.copy(fontSize = 15.sp, fontWeight = FontWeight.SemiBold))
+        Box(Modifier.padding(horizontal = 16.dp)) {
+            SegmentedTabs(MessageTextSize.entries.map { it.label }, style.textSize.ordinal, c) {
+                session.updateMessageStyle(style.copy(textSize = MessageTextSize.entries[it]))
+            }
+        }
+        Spacer(Modifier.height(6.dp))
+        SwitchRow(
+            title = "Mostrar horários",
+            subtitle = "Hora e vistos embaixo de cada mensagem.",
+            checked = style.showTimes,
+            enabled = true,
+            c = c,
+            onToggle = { session.updateMessageStyle(style.copy(showTimes = !style.showTimes)) },
+        )
+    }
+}
+
+@Composable
+private fun ColumnScope.PreviewBubble(text: String, mine: Boolean, style: MessageStyle, c: CommColors) {
+    val shape = RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp, bottomStart = if (mine) 18.dp else 5.dp, bottomEnd = if (mine) 5.dp else 18.dp)
+    Text(
+        text,
+        color = if (mine) Color.White else c.onReceived,
+        modifier = Modifier
+            .align(if (mine) Alignment.End else Alignment.Start)
+            .clip(shape)
+            .background(if (mine) Color(style.bubble.argb) else c.received)
+            .then(if (mine || c.dark) Modifier else Modifier.border(1.dp, c.border, shape))
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        style = MaterialTheme.typography.bodyLarge.copy(fontSize = style.textSize.sp.sp),
+    )
+}

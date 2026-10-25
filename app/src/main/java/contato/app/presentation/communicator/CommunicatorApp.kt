@@ -68,8 +68,9 @@ private enum class CommScreen { PERMISSION, CONNECT, MAIN, INFO }
 /**
  * Raiz do modo Comunicador:
  *  1. Permissões (pedidas sozinhas ao entrar).
- *  2. Conexão: procura sozinha (se a busca automática estiver ligada) e mostra cada etapa.
- *  3. Conectou: mostra "Conectado" por um instante e abre as abas Conversas / Perfil / Ajustes.
+ *  2. Sem login: tela de conexão (procura sozinha e mostra cada etapa). Com login: pula direto
+ *     para as abas; a busca continua em segundo plano e a aba Conexão mostra o estado.
+ *  3. Conectou: abre as abas Conversas / Conexão / Perfil / Ajustes.
  *  "Sobre o ConTato" abre por cima, já na aba pedida (Como funciona ou Matriz Braille).
  */
 @Composable
@@ -93,7 +94,9 @@ internal fun CommunicatorApp(
         if (granted) session.start()
     }
 
-    var showMain by rememberSaveable { mutableStateOf(session.hasConnected) }
+    // Logado: abre direto nas conversas (a conexão fica na aba Conexão, procurando sozinha).
+    // Sem login: começa na tela de busca, como antes.
+    var showMain by rememberSaveable { mutableStateOf(session.hasConnected || session.account.isSignedIn) }
     var infoTab by rememberSaveable { mutableStateOf<InfoTab?>(null) }
 
     // Conectou na tela de conexão: deixa o "Conectado" aparecer e abre as conversas.
@@ -338,7 +341,7 @@ private fun ConnectScreen(
 
 /** Segmento de progresso com rótulo (referência das barras "Backlog / In Progress / Completed"). */
 @Composable
-private fun StepSegment(label: String, done: Boolean, current: Boolean, c: CommColors, modifier: Modifier) {
+internal fun StepSegment(label: String, done: Boolean, current: Boolean, c: CommColors, modifier: Modifier) {
     val reduce = motionReduced()
     val bar by animateColorAsState(
         when { done -> c.online; current -> c.accent; else -> c.border },
@@ -372,7 +375,7 @@ private fun StepSegment(label: String, done: Boolean, current: Boolean, c: CommC
 
 /** Dois celulares e ondas entre eles. As ondas param com "reduzir animações". */
 @Composable
-private fun PhonesIllustration(searching: Boolean, connected: Boolean, c: CommColors) {
+internal fun PhonesIllustration(searching: Boolean, connected: Boolean, c: CommColors) {
     val reduce = motionReduced()
     val t = if (searching && !reduce) {
         rememberInfiniteTransition(label = "waves").animateFloat(
