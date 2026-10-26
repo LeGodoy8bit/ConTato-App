@@ -407,6 +407,26 @@ internal class DeafblindSession(
         for (i in points.indices) points[i] = false
     }
 
+    /**
+     * A tela girou 180° (celular de ponta-cabeça) ou voltou. A cela gira junto, então os pontos
+     * continuam no mesmo lugar para a mão; a vibração só avisa que girou.
+     * Durante uma mensagem não interrompe a leitura: guarda e vibra assim que ela terminar.
+     */
+    fun onScreenFlipped(upsideDown: Boolean) {
+        if (isPlaying) pendingFlip = upsideDown else flipFeedback(upsideDown)
+    }
+
+    private var pendingFlip: Boolean? = null
+
+    private fun playPendingFlip() {
+        val flip = pendingFlip ?: return
+        pendingFlip = null
+        flipFeedback(flip)
+    }
+
+    private fun flipFeedback(upsideDown: Boolean) =
+        feedback(if (upsideDown) SystemFeedbackEvent.SCREEN_UPSIDE_DOWN else SystemFeedbackEvent.SCREEN_UPRIGHT)
+
     private fun feedback(event: SystemFeedbackEvent) {
         playback.playSystemFeedback(SystemHapticPatterns.getPulsesFor(event))
     }
@@ -455,6 +475,7 @@ internal class DeafblindSession(
             isPlaying = false
             playingIndex = -1
             if (id.isNotEmpty()) nearby.sendMessage(WireProtocol.encode(WireMessage.Played(id)))
+            playPendingFlip()
         }, PROGRESS_TOKEN, start + HapticWaveformTuner.scaleTime(timeline.totalMs, tuning))
     }
 
@@ -466,6 +487,7 @@ internal class DeafblindSession(
         playingIndex = -1
         if (lastReceivedId.isNotEmpty()) nearby.sendMessage(WireProtocol.encode(WireMessage.Played(lastReceivedId)))
         echo = CommandEcho("Vibração interrompida", ok = true)
+        playPendingFlip()
     }
 
     // ───────── NearbyListener ─────────

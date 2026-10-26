@@ -25,6 +25,8 @@ enum class SystemFeedbackEvent {
     SPLASH_SYMBOL_FORMED,
     DOT_ON,  // ponto da cela marcado
     DOT_OFF, // ponto da cela desmarcado
+    SCREEN_UPSIDE_DOWN, // a tela girou: o celular está de ponta-cabeça
+    SCREEN_UPRIGHT,     // a tela voltou para a posição normal
 
 
 }

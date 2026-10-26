@@ -14,6 +14,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.core.content.ContextCompat
 import contato.app.core.connection.NearbyPermissions
+import contato.app.core.orientation.FlipWatcher
 import contato.app.data.DeafblindSettingsPreferencesRepository
 import contato.app.data.PreferencesConversationArchive
 import contato.app.domain.model.DeafblindTheme
@@ -31,6 +32,7 @@ class DeafblindActivity : ComponentActivity() {
 
     private lateinit var session: DeafblindSession
     private var permissionsGranted by mutableStateOf(false)
+    private lateinit var flipWatcher: FlipWatcher
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -44,6 +46,7 @@ class DeafblindActivity : ComponentActivity() {
             account = CloudAccount(this, UserMode.DEAFBLIND),
         )
         permissionsGranted = hasAllPermissions()
+        flipWatcher = FlipWatcher(this, onFlip = session::onScreenFlipped)
 
         setContent {
             ContatoTheme(darkTheme = session.settings.theme == DeafblindTheme.HIGH_CONTRAST) {
@@ -62,11 +65,13 @@ class DeafblindActivity : ComponentActivity() {
         super.onResume()
         permissionsGranted = hasAllPermissions()
         session.setActive(true)
+        flipWatcher.start()
     }
 
     /** Para a vibração e encerra a conexão quando o app sai de foco. */
     override fun onPause() {
         super.onPause()
+        flipWatcher.stop()
         // A janela do Google (login feito pela pessoa de apoio) pausa o app: aí não derruba a conexão.
         if (!session.account.busy) session.setActive(false)
     }

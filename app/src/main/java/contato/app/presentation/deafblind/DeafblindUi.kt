@@ -23,7 +23,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -43,10 +45,9 @@ import contato.app.presentation.theme.motionReduced
 
 /**
  * Cores do modo Surdocego.
- * - Claro: igual ao protótipo (fundo branco, ponto marcado azul forte, quadrados azul bem claro,
- *   área de gestos azul claro).
- * - Alto contraste: fundo quase preto e amarelo forte (a combinação mais legível para baixa visão),
- *   com cinzas azulados suaves no resto, para não cansar a vista.
+ * - Claro: fundo branco, bolas azuis grandes (marcada = azul forte, desmarcada = azul clarinho com
+ *   contorno azul médio, sempre visível) e a grade quase invisível.
+ * - Alto contraste: fundo quase preto e amarelo forte (a combinação mais legível para baixa visão).
  */
 internal class DbColors(
     val bg: Color, val surface: Color, val onBg: Color, val muted: Color, val border: Color,
@@ -54,37 +55,43 @@ internal class DbColors(
     val dotOn: Color, val onDotOn: Color, val dotOff: Color, val dotOffBorder: Color, val onDotOff: Color,
     val gesture: Color, val onGesture: Color, val accent: Color, val online: Color, val searching: Color,
     val error: Color, val highlightBg: Color, val highlightFg: Color, val dark: Boolean,
+    /** Linhas finas da grade da cela (quase invisíveis). */
+    val gridLine: Color,
+    /** Halo atrás da bola marcada. */
+    val dotGlow: Color,
 )
 
 internal fun dbColors(theme: DeafblindTheme): DbColors = when (theme) {
     DeafblindTheme.LIGHT -> DbColors(
         bg = Color.White, surface = Color(0xFFF3F7FE), onBg = Color(0xFF0E1726), muted = Color(0xFF55627A),
         border = Color(0xFFD6E4FB),
-        squareOff = Color(0xFFEDF3FD), squareOn = Color(0xFFD6E4FF), squareBorder = Color(0xFFC9D9F3),
-        dotOn = Color(0xFF0062FF), onDotOn = Color.White, dotOff = Color(0xFFD9E6FB), dotOffBorder = Color(0xFFAFC6EC),
-        onDotOff = Color(0xFF5F78A2),
-        gesture = Color(0xFFCCE0FC), onGesture = Color(0xFF0B2A5B), accent = Color(0xFF0062FF),
+        squareOff = Color(0xFFEDF3FD), squareOn = Color(0xFFF0F5FF), squareBorder = Color(0xFFC9D9F3),
+        dotOn = Color(0xFF0057FF), onDotOn = Color.White, dotOff = Color(0xFFE5EEFD), dotOffBorder = Color(0xFF6E92D8),
+        onDotOff = Color(0xFF3F5E96),
+        gesture = Color(0xFFCCE0FC), onGesture = Color(0xFF0B2A5B), accent = Color(0xFF0057FF),
         online = Color(0xFF1E8E3E), searching = Color(0xFFB7791F), error = Color(0xFFB3261E),
-        highlightBg = Color(0xFF0062FF), highlightFg = Color.White, dark = false,
+        highlightBg = Color(0xFF0057FF), highlightFg = Color.White, dark = false,
+        gridLine = Color(0xFFE3EAF6), dotGlow = Color(0xFF0057FF).copy(alpha = 0.16f),
     )
     DeafblindTheme.HIGH_CONTRAST -> DbColors(
         bg = Color(0xFF0B0F19), surface = Color(0xFF161C2B), onBg = Color.White, muted = Color(0xFFA9B4C8),
         border = Color(0xFF2A3347),
-        squareOff = Color(0xFF131926), squareOn = Color(0xFF2A2512), squareBorder = Color(0xFF232B3D),
-        dotOn = Color(0xFFFFD84D), onDotOn = Color(0xFF0B0F19), dotOff = Color(0xFF1E2638), dotOffBorder = Color(0xFF4A5670),
-        onDotOff = Color(0xFFC9D2E3),
+        squareOff = Color(0xFF131926), squareOn = Color(0xFF1B1A12), squareBorder = Color(0xFF232B3D),
+        dotOn = Color(0xFFFFD84D), onDotOn = Color(0xFF0B0F19), dotOff = Color(0xFF1A2133), dotOffBorder = Color(0xFF8C98B2),
+        onDotOff = Color(0xFFD5DCEA),
         gesture = Color(0xFF1A2236), onGesture = Color.White, accent = Color(0xFFFFD84D),
         online = Color(0xFF5BD17A), searching = Color(0xFFFFB547), error = Color(0xFFFF8A80),
         highlightBg = Color(0xFFFFD84D), highlightFg = Color(0xFF0B0F19), dark = true,
+        gridLine = Color(0xFF232B3E), dotGlow = Color(0xFFFFD84D).copy(alpha = 0.18f),
     )
 }
 
 // ───────────────────────── Cela Braille ─────────────────────────
 
 /**
- * Os 6 pontos na posição real da cela (1 2 3 na coluna da esquerda, 4 5 6 na direita).
- * Cada ponto é um quadrado grande (toda a área é tocável) com o círculo no meio:
- * a cela ocupa todo o espaço que [modifier] der.
+ * Os 6 pontos na posição real da cela (1 2 3 na coluna da esquerda, 4 5 6 na direita), numa grade
+ * 3 × 2 que vai até as bordas: cada sexto da área é um alvo de toque inteiro, sem espaços mortos.
+ * As divisões são linhas finas quase invisíveis; o que aparece são as bolas, grandes e com contraste.
  */
 @Composable
 internal fun BrailleCell(
@@ -93,11 +100,21 @@ internal fun BrailleCell(
     dimmed: Boolean,
     onToggle: (Int) -> Unit,
     modifier: Modifier = Modifier,
-    gap: Dp = 12.dp,
 ) {
-    Column(modifier, verticalArrangement = Arrangement.spacedBy(gap)) {
+    val line = colors.gridLine
+    Column(
+        modifier.drawBehind {
+            val stroke = 1.dp.toPx()
+            val inset = 20.dp.toPx() // as linhas não encostam nas bordas: a grade fica leve
+            drawLine(line, Offset(size.width / 2, inset), Offset(size.width / 2, size.height - inset), stroke)
+            for (i in 1..2) {
+                val y = size.height * i / 3f
+                drawLine(line, Offset(inset, y), Offset(size.width - inset, y), stroke)
+            }
+        },
+    ) {
         for (row in 0..2) {
-            Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(gap)) {
+            Row(Modifier.weight(1f).fillMaxWidth()) {
                 for (col in 0..1) {
                     val index = col * 3 + row
                     BrailleSquare(index, points[index], colors, dimmed, Modifier.weight(1f).fillMaxHeight()) { onToggle(index) }
@@ -110,26 +127,31 @@ internal fun BrailleCell(
 @Composable
 private fun BrailleSquare(index: Int, active: Boolean, colors: DbColors, dimmed: Boolean, modifier: Modifier, onToggle: () -> Unit) {
     val reduce = motionReduced()
-    val square by animateColorAsState(
-        if (active) colors.squareOn else colors.squareOff,
-        animationSpec = if (reduce) snap() else tween(Motion.FAST), label = "square",
+    val wash by animateColorAsState(
+        if (active) colors.squareOn else colors.bg,
+        animationSpec = if (reduce) snap() else tween(Motion.FAST), label = "wash",
     )
     val fill by animateColorAsState(
         if (active) colors.dotOn else colors.dotOff,
         animationSpec = if (reduce) snap() else tween(Motion.QUICK), label = "fill",
     )
-    // Pop ao marcar (transitions.dev: curva com leve quique).
+    val ring by animateColorAsState(
+        if (active) colors.dotOn else colors.dotOffBorder,
+        animationSpec = if (reduce) snap() else tween(Motion.QUICK), label = "ring",
+    )
+    // Pop ao marcar (curva com leve quique) e halo que aparece atrás da bola marcada.
     val scale by animateFloatAsState(
-        if (active) 1f else 0.9f,
+        if (active) 1f else 0.92f,
         animationSpec = if (reduce) snap() else tween(Motion.FAST, easing = Motion.Bounce), label = "scale",
     )
-    val shape = RoundedCornerShape(28.dp)
+    val glow by animateFloatAsState(
+        if (active) 1f else 0f,
+        animationSpec = if (reduce) snap() else tween(Motion.FAST), label = "glow",
+    )
     BoxWithConstraints(
         modifier
-            .clip(shape)
-            .background(square.copy(alpha = if (dimmed && !active) 0.7f else 1f))
-            .border(1.dp, if (active) colors.dotOn.copy(alpha = 0.5f) else colors.squareBorder, shape)
-            // Sempre tocável: antes da primeira mensagem a sessão responde com a vibração de erro.
+            .background(wash)
+            // A área inteira é tocável. Sempre ativa: antes da 1ª mensagem a sessão responde com a vibração de erro.
             .toggleable(value = active, role = Role.Checkbox, onValueChange = { onToggle() })
             .semantics {
                 contentDescription = "Ponto ${index + 1}"
@@ -137,20 +159,32 @@ private fun BrailleSquare(index: Int, active: Boolean, colors: DbColors, dimmed:
             },
         contentAlignment = Alignment.Center,
     ) {
-        val dot = minOf(maxWidth, maxHeight) * 0.74f
+        val dot = minOf(maxWidth, maxHeight) * 0.80f
+        val alpha = if (dimmed && !active) 0.55f else 1f
+        // Halo.
+        Box(
+            Modifier
+                .size(dot * 1.12f)
+                .graphicsLayer { this.alpha = glow; scaleX = 0.9f + 0.1f * glow; scaleY = scaleX }
+                .clip(CircleShape)
+                .background(colors.dotGlow),
+        )
         Box(
             Modifier
                 .size(dot)
-                .scale(scale)
+                .graphicsLayer { scaleX = scale; scaleY = scale; this.alpha = alpha }
                 .clip(CircleShape)
                 .background(fill)
-                .border(if (colors.dark) 2.dp else 1.5.dp, if (active) colors.dotOn else colors.dotOffBorder, CircleShape),
+                .then(if (active) Modifier else Modifier.border(3.dp, ring, CircleShape)),
             contentAlignment = Alignment.Center,
         ) {
             Text(
                 "${index + 1}",
-                color = (if (active) colors.onDotOn else colors.onDotOff).copy(alpha = 0.7f),
-                style = MaterialTheme.typography.titleLarge.copy(fontSize = (dot.value * 0.18f).coerceIn(14f, 30f).sp, fontWeight = FontWeight.Bold),
+                color = if (active) colors.onDotOn else colors.onDotOff,
+                style = MaterialTheme.typography.titleLarge.copy(
+                    fontSize = (dot.value * 0.2f).coerceIn(16f, 34f).sp,
+                    fontWeight = FontWeight.Bold,
+                ),
             )
         }
     }

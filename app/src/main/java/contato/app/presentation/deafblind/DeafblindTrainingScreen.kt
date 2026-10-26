@@ -464,7 +464,7 @@ private fun AnswerStep(
             Switch(checked = reveal, onCheckedChange = { onReveal() }, colors = SwitchDefaults.colors(checkedTrackColor = colors.dotOn))
         }
         Spacer(Modifier.height(10.dp))
-        BrailleCell(points, colors, dimmed = false, onToggle = onToggle, modifier = Modifier.weight(1f).fillMaxWidth(), gap = 10.dp)
+        BrailleCell(points, colors, dimmed = false, onToggle = onToggle, modifier = Modifier.weight(1f).fillMaxWidth())
         Spacer(Modifier.height(10.dp))
         if (!singleLetter) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

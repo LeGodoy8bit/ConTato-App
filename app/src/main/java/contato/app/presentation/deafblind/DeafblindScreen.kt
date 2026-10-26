@@ -174,7 +174,7 @@ internal fun DeafblindApp(
 /**
  * Layout do protótipo, pensado para o toque:
  *  - topo bem pequeno (status, mensagem e resposta): é só apoio para quem acompanha;
- *  - a cela: 6 quadrados grandes, ocupando a maior parte da tela;
+ *  - a cela: grade 3 × 2 até as bordas, com bolas grandes (cada sexto da área é tocável);
  *  - a área de gestos, larga e discreta;
  *  - o menu embaixo.
  */
@@ -199,7 +199,7 @@ private fun DeafblindHome(session: DeafblindSession, colors: DbColors, onOpen: (
                 colors = colors,
                 dimmed = !session.canCompose,
                 onToggle = session::togglePoint,
-                modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp),
+                modifier = Modifier.weight(1f).fillMaxWidth().padding(vertical = 4.dp), // até as bordas
             )
             GestureArea(session, colors, Modifier.height(gestureHeight))
             BottomMenuBar(colors, unread = session.unreadTotal, onMenu = { showMenu = true })

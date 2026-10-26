@@ -113,6 +113,15 @@ object SystemHapticPatterns {
             SystemFeedbackEvent.DOT_OFF ->
                 listOf(HapticPulse(HapticConfig.DOT_OFF_DURATION, HapticConfig.DOT_OFF_AMPLITUDE))
 
+            // A tela girou para ponta-cabeça: longa, curta, longa (forte). Não existe em nenhum
+            // outro aviso, então a pessoa sabe que a cela "virou" junto com o celular.
+            SystemFeedbackEvent.SCREEN_UPSIDE_DOWN ->
+                listOf(HapticPulse(long, strong), HapticPulse(short, strong), HapticPulse(long, strong))
+
+            // Voltou para a posição normal: curta e longa.
+            SystemFeedbackEvent.SCREEN_UPRIGHT ->
+                listOf(HapticPulse(short, strong), HapticPulse(long, strong))
+
         }
     }
 }

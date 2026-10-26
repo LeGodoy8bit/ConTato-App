@@ -49,10 +49,16 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.ConTatoApp">
 
+        <!-- Android 16 em tablets ignora a trava de orientação; o app foi feito só para a vertical. -->
+        <property
+            android:name="android.window.PROPERTY_COMPAT_ALLOW_RESTRICTED_RESIZABILITY"
+            android:value="true" />
+
         <!-- Tela inicial do aplicativo: splash completa na 1ª abertura, curta nas seguintes -->
         <activity
             android:name=".presentation.onboarding.SplashActivity"
-            android:exported="true">
+            android:exported="true"
+            android:screenOrientation="portrait">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -62,7 +68,8 @@
         <!-- Tela de seleção do modo de comunicação -->
         <activity
             android:name=".presentation.ModeSelectionActivity"
-            android:exported="false" />
+            android:exported="false"
+            android:screenOrientation="portrait" />
 
         <!-- Tela de depuração da conexão entre dispositivos -->
         <activity
@@ -74,6 +81,7 @@
         <activity
             android:name=".presentation.DeafblindActivity"
             android:exported="false"
+            android:screenOrientation="sensorPortrait"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden|uiMode|density"
             />
 
@@ -82,6 +90,7 @@
         <activity
             android:name=".presentation.CommunicatorActivity"
             android:exported="false"
+            android:screenOrientation="portrait"
             android:windowSoftInputMode="adjustResize"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden|uiMode|density"
 
