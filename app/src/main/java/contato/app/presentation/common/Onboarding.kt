@@ -8,6 +8,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.pager.HorizontalPager
@@ -35,6 +36,8 @@ import androidx.compose.ui.unit.sp
 import contato.app.presentation.theme.Motion
 import kotlinx.coroutines.launch
 import kotlin.math.absoluteValue
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 
 /** Uma página do onboarding: ilustração em cima, título e texto embaixo. */
 internal class OnboardingPage(
@@ -62,26 +65,30 @@ internal fun OnboardingPager(
     onFinish: () -> Unit,
     modifier: Modifier = Modifier,
     onSkip: (() -> Unit)? = null,
+    /** Botão secundário da última página (ex.: "Agora não"). Nas outras páginas aparece "Voltar". */
+    lastSecondaryLabel: String? = null,
+    onLastSecondary: (() -> Unit)? = null,
 ) {
     val state = rememberPagerState { pages.size }
     val scope = rememberCoroutineScope()
     val last = state.currentPage == pages.lastIndex
 
     Column(modifier.fillMaxSize().background(colors.bg)) {
-        Box(Modifier.fillMaxWidth().height(52.dp).padding(horizontal = 8.dp), contentAlignment = Alignment.CenterEnd) {
+        Box(Modifier.fillMaxWidth().heightIn(min = 52.dp).padding(horizontal = 8.dp), contentAlignment = Alignment.CenterEnd) {
             if (onSkip != null && !last) {
                 TextButton(onClick = onSkip) { Text("Pular", color = colors.body, fontWeight = FontWeight.SemiBold) }
             }
         }
         HorizontalPager(state = state, modifier = Modifier.weight(1f).fillMaxWidth()) { page ->
             val p = pages[page]
+            // Rola quando a letra está grande (até 200% ou mais): título e texto nunca ficam cortados.
             Column(
-                Modifier.fillMaxSize().padding(horizontal = 28.dp),
+                Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 28.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Box(
                     Modifier
-                        .weight(1f)
+                        .heightIn(min = 160.dp, max = 300.dp)
                         .fillMaxWidth()
                         .graphicsLayer {
                             // Paralaxe: a ilustração anda um pouco mais devagar que o texto.
@@ -107,25 +114,52 @@ internal fun OnboardingPager(
         }
         PageDots(pages.size, state.currentPage, colors, Modifier.align(Alignment.CenterHorizontally))
         Spacer(Modifier.height(24.dp))
-        Box(
-            Modifier
-                .padding(horizontal = 24.dp)
-                .fillMaxWidth()
-                .heightIn(min = 60.dp)
-                .clip(CircleShape)
-                .background(colors.buttonBg)
-                .clickable(role = Role.Button) {
-                    if (last) onFinish() else scope.launch { state.animateScrollToPage(state.currentPage + 1) }
-                }
-                .padding(vertical = 16.dp),
-            contentAlignment = Alignment.Center,
+        // Rodapé com dois botões em pílula (referência): Voltar / Continuar.
+        val secondary: (() -> Unit)? = when {
+            last && onLastSecondary != null -> onLastSecondary
+            state.currentPage > 0 -> ({ scope.launch { state.animateScrollToPage(state.currentPage - 1) }; Unit })
+            else -> null
+        }
+        val secondaryLabel = if (last && onLastSecondary != null) lastSecondaryLabel ?: "Agora não" else "Voltar"
+        Row(
+            Modifier.padding(horizontal = 24.dp).fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            AnimatedContent(
-                targetState = if (last) finishLabel else "Próximo",
-                transitionSpec = { fadeIn(tween(Motion.QUICK)) togetherWith fadeOut(tween(Motion.QUICK)) },
-                label = "cta",
-            ) { label ->
-                Text(label, color = colors.buttonFg, style = MaterialTheme.typography.titleMedium.copy(fontSize = 17.sp, fontWeight = FontWeight.Bold))
+            if (secondary != null) {
+                Box(
+                    Modifier
+                        .weight(1f)
+                        .heightIn(min = 60.dp)
+                        .clip(CircleShape)
+                        .border(1.5.dp, colors.dotInactive, CircleShape)
+                        .clickable(role = Role.Button, onClick = secondary)
+                        .padding(vertical = 16.dp, horizontal = 12.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(secondaryLabel, color = colors.title, textAlign = TextAlign.Center,
+                        style = MaterialTheme.typography.titleMedium.copy(fontSize = 17.sp, fontWeight = FontWeight.SemiBold))
+                }
+            }
+            Box(
+                Modifier
+                    .weight(1f)
+                    .heightIn(min = 60.dp)
+                    .clip(CircleShape)
+                    .background(colors.buttonBg)
+                    .clickable(role = Role.Button) {
+                        if (last) onFinish() else scope.launch { state.animateScrollToPage(state.currentPage + 1) }
+                    }
+                    .padding(vertical = 16.dp, horizontal = 12.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                AnimatedContent(
+                    targetState = if (last) finishLabel else "Continuar",
+                    transitionSpec = { fadeIn(tween(Motion.QUICK)) togetherWith fadeOut(tween(Motion.QUICK)) },
+                    label = "cta",
+                ) { label ->
+                    Text(label, color = colors.buttonFg, textAlign = TextAlign.Center,
+                        style = MaterialTheme.typography.titleMedium.copy(fontSize = 17.sp, fontWeight = FontWeight.Bold))
+                }
             }
         }
         Spacer(Modifier.navigationBarsPadding().height(20.dp))

@@ -9,14 +9,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ExitToApp
-import androidx.compose.material.icons.filled.AccountCircle
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -54,6 +46,7 @@ import contato.app.domain.model.MessageTextSize
 import contato.app.presentation.theme.ContatoIcons
 import contato.app.domain.repository.AiStatus
 import kotlinx.coroutines.launch
+import androidx.compose.foundation.selection.toggleable
 
 /**
  * Ajustes: conta (login com Google numa janela que explica o que muda) e preferências.
@@ -115,8 +108,9 @@ internal fun SettingsTab(session: CommunicatorSession, c: CommColors) {
                 c = c,
                 onToggle = { session.updateAiEnabled(!session.aiEnabled) },
             )
+            LinkRow(ContatoIcons.Sparkles, "Como funciona a IA", null, c) { session.openAiIntro() }
             HorizontalDivider(color = c.border)
-            LinkRow(Icons.Default.Delete, "Apagar conversas", null, c, tint = DangerRed) { confirmClear = true }
+            LinkRow(ContatoIcons.Trash, "Apagar conversas", null, c, tint = c.danger) { confirmClear = true }
         }
     }
 
@@ -149,7 +143,7 @@ internal fun SettingsTab(session: CommunicatorSession, c: CommColors) {
             },
             confirmButton = {
                 TextButton(onClick = { session.clearHistory(); confirmClear = false }) {
-                    Text("Apagar", color = DangerRed, fontWeight = FontWeight.Bold)
+                    Text("Apagar", color = c.danger, fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = { TextButton(onClick = { confirmClear = false }) { Text("Cancelar") } },
@@ -174,7 +168,7 @@ private fun LoginInviteCard(c: CommColors, onClick: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(Modifier.size(52.dp).clip(CircleShape).background(c.surface), contentAlignment = Alignment.Center) {
-            Icon(Icons.Default.AccountCircle, null, tint = c.accent, modifier = Modifier.size(28.dp))
+            Icon(ContatoIcons.UserCircle, null, tint = c.accent, modifier = Modifier.size(28.dp))
         }
         Spacer(Modifier.width(14.dp))
         Column(Modifier.weight(1f)) {
@@ -206,7 +200,7 @@ private fun AccountCard(name: String, email: String?, c: CommColors, onSignOut: 
             }
         }
         HorizontalDivider(color = c.border)
-        LinkRow(Icons.AutoMirrored.Filled.ExitToApp, "Sair da conta", null, c, onClick = onSignOut)
+        LinkRow(ContatoIcons.LogOut, "Sair da conta", null, c, onClick = onSignOut)
     }
 }
 
@@ -240,7 +234,7 @@ internal fun LoginBottomSheet(session: CommunicatorSession, c: CommColors, onDis
                     style = MaterialTheme.typography.titleLarge.copy(fontSize = 22.sp, fontWeight = FontWeight.Bold))
                 IconButton(onClick = ::close) {
                     Box(Modifier.size(36.dp).clip(CircleShape).background(c.bg), contentAlignment = Alignment.Center) {
-                        Icon(Icons.Default.Close, contentDescription = "Fechar", tint = c.onSurface, modifier = Modifier.size(18.dp))
+                        Icon(ContatoIcons.Close, contentDescription = "Fechar", tint = c.onSurface, modifier = Modifier.size(18.dp))
                     }
                 }
             }
@@ -250,8 +244,8 @@ internal fun LoginBottomSheet(session: CommunicatorSession, c: CommColors, onDis
             Spacer(Modifier.height(16.dp))
             Column(Modifier.padding(end = 8.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 Benefit(ContatoIcons.Cloud, "Guardar suas conversas na nuvem", "E recuperar tudo se trocar de celular.", c)
-                Benefit(Icons.Default.Star, "Levar seu nome junto", "O nome que aparece para o celular tátil.", c)
-                Benefit(Icons.Default.Lock, "Proteger seus dados", "Só você acessa. Dá para sair e apagar quando quiser.", c)
+                Benefit(ContatoIcons.Sparkles, "Levar seu nome junto", "O nome que aparece para o celular tátil.", c)
+                Benefit(ContatoIcons.Lock, "Proteger seus dados", "Só você acessa. Dá para sair e apagar quando quiser.", c)
             }
             Spacer(Modifier.height(24.dp))
             GoogleButton(
@@ -267,7 +261,7 @@ internal fun LoginBottomSheet(session: CommunicatorSession, c: CommColors, onDis
                 !account.isConfigured -> Row(Modifier.fillMaxWidth().padding(end = 8.dp), horizontalArrangement = Arrangement.Center) {
                     ToneChip("Disponível em breve", Tone.INFO, c)
                 }
-                error != null -> Text(error, color = DangerRed, textAlign = TextAlign.Center,
+                error != null -> Text(error, color = c.danger, textAlign = TextAlign.Center,
                     modifier = Modifier.fillMaxWidth().padding(end = 8.dp).semantics { liveRegion = LiveRegionMode.Polite },
                     style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp, lineHeight = 18.sp))
             }
@@ -356,7 +350,7 @@ private fun SwitchRow(
 ) {
     Row(
         Modifier
-            .clickable(enabled = enabled, role = Role.Switch, onClick = onToggle)
+            .toggleable(value = checked, enabled = enabled, role = Role.Switch, onValueChange = { onToggle() })
             .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -408,15 +402,16 @@ private fun MessageStyleCard(session: CommunicatorSession, c: CommColors) {
                     Modifier
                         .size(48.dp)
                         .clip(CircleShape)
+                        // O toque vale para o círculo inteiro de 48 dp (antes só a parte de dentro, 38 dp).
+                        .selectable(selected = selected, role = Role.RadioButton) { session.updateMessageStyle(style.copy(bubble = color)) }
                         .border(3.dp, if (selected) Color(color.argb) else Color.Transparent, CircleShape)
                         .padding(5.dp)
                         .clip(CircleShape)
                         .background(Color(color.argb))
-                        .selectable(selected = selected, role = Role.RadioButton) { session.updateMessageStyle(style.copy(bubble = color)) }
                         .semantics { contentDescription = color.label },
                     contentAlignment = Alignment.Center,
                 ) {
-                    if (selected) Icon(Icons.Default.Check, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
+                    if (selected) Icon(ContatoIcons.Check, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
                 }
             }
         }

@@ -34,17 +34,15 @@ class HapticWaveformBuilder {
             val isLastPattern = index == message.messagePattern.lastIndex
 
             if (!isLastPattern) {
-                val currentIsSpace = pattern.events.isEmpty()
-                val nextIsSpace = message.messagePattern[index + 1].events.isEmpty()
+                val pause = pauseBetween(
+                    currentIsSpace = pattern.events.isEmpty(),
+                    nextIsSpace = message.messagePattern[index + 1].events.isEmpty()
+                )
 
-                val pause = if (currentIsSpace || nextIsSpace) {
-                    HapticConfig.SPACE_PAUSE
-                } else {
-                    HapticConfig.CHARACTER_PAUSE
+                if (pause > 0L) {
+                    timings.add(pause)
+                    amplitudes.add(0)
                 }
-
-                timings.add(pause)
-                amplitudes.add(0)
             }
         }
 
@@ -66,6 +64,21 @@ class HapticWaveformBuilder {
 
             timings.add(HapticConfig.POINT_PAUSE)
             amplitudes.add(0)
+        }
+    }
+
+    companion object {
+        /**
+         * Pausa depois de um item da mensagem. Regra única, usada também pelo
+         * HapticTimelineBuilder, para a linha do tempo bater com a vibração:
+         * - antes de um espaço: SPACE_PAUSE (a pausa da palavra, aplicada uma vez só);
+         * - depois do espaço: nada, porque a pausa da palavra já foi aplicada;
+         * - entre duas letras: CHARACTER_PAUSE.
+         */
+        fun pauseBetween(currentIsSpace: Boolean, nextIsSpace: Boolean): Long = when {
+            currentIsSpace -> 0L
+            nextIsSpace -> HapticConfig.SPACE_PAUSE
+            else -> HapticConfig.CHARACTER_PAUSE
         }
     }
 }

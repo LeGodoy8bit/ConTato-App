@@ -1,5 +1,6 @@
 package contato.app
 
+import contato.app.core.config.HapticConfig
 import contato.app.domain.service.HapticMessageService
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -28,7 +29,7 @@ class HapticMessageServiceTest {
         @Test(expected = IllegalArgumentException::class)
         fun `deve lancar excecao para mensagem acima do limite`() {
 
-            val mensagemGrande = "A".repeat(51)
+            val mensagemGrande = "A".repeat(HapticConfig.MAX_MESSAGE_LENGTH + 1)
 
             service.createMessage(mensagemGrande)
         }

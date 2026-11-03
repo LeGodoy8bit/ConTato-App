@@ -77,6 +77,6 @@ dependencies {
     implementation(libs.androidx.credentials)
     implementation(libs.androidx.credentials.play.services)
     implementation(libs.googleid)
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
+
 
 }

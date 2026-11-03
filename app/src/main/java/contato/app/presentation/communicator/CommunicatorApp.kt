@@ -17,18 +17,17 @@ import androidx.compose.animation.scaleOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import contato.app.R
+import contato.app.presentation.common.Illustration
+import androidx.compose.ui.semantics.Role
+import androidx.compose.foundation.clickable
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.LocationOn
-import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.Phone
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -62,15 +61,17 @@ import contato.app.domain.state.ConnectionState
 import contato.app.presentation.theme.Motion
 import contato.app.presentation.theme.motionReduced
 import kotlinx.coroutines.delay
+import contato.app.presentation.theme.ContatoIcons
 
-private enum class CommScreen { PERMISSION, CONNECT, MAIN, INFO }
+private enum class CommScreen { PERMISSION, CONNECT, MAIN, INFO, AI_INTRO }
 
 /**
  * Raiz do modo Comunicador:
  *  1. Permissões (pedidas sozinhas ao entrar).
- *  2. Sem login: tela de conexão (procura sozinha e mostra cada etapa). Com login: pula direto
- *     para as abas; a busca continua em segundo plano e a aba Conexão mostra o estado.
- *  3. Conectou: abre as abas Conversas / Conexão / Perfil / Ajustes.
+ *  2. Abre sempre nas abas (Conversas / Conexão / Perfil / Ajustes). A busca continua em segundo
+ *     plano; a tela de conexão só aparece quando a pessoa toca em "Conectar".
+ *  3. Conectou pela tela de conexão: volta e abre a conversa daquele aparelho.
+ *  Depois de entrar na conta: apresentação da IA (uma vez).
  *  "Sobre o ConTato" abre por cima, já na aba pedida (Como funciona ou Matriz Braille).
  */
 @Composable
@@ -94,25 +95,36 @@ internal fun CommunicatorApp(
         if (granted) session.start()
     }
 
-    // Logado: abre direto nas conversas (a conexão fica na aba Conexão, procurando sozinha).
-    // Sem login: começa na tela de busca, como antes.
-    var showMain by rememberSaveable { mutableStateOf(session.hasConnected || session.account.isSignedIn) }
+    // A tela de conexão só abre quando a pessoa pede ("Conectar").
+    var connecting by rememberSaveable { mutableStateOf(false) }
     var infoTab by rememberSaveable { mutableStateOf<InfoTab?>(null) }
+    val openConnect = {
+        if (session.connectionState != ConnectionState.CONNECTED) session.searchAgain()
+        connecting = true
+    }
 
-    // Conectou na tela de conexão: deixa o "Conectado" aparecer e abre as conversas.
-    LaunchedEffect(session.connectionState) {
-        if (session.connectionState == ConnectionState.CONNECTED && !showMain) {
-            delay(1200)
-            showMain = true
+    // Conectou na tela de conexão: deixa o "Tudo pronto" aparecer e abre a conversa.
+    LaunchedEffect(session.connectionState, connecting) {
+        if (session.connectionState == ConnectionState.CONNECTED && connecting) {
+            delay(1400)
+            connecting = false
+            session.requestOpenChat()
         }
     }
 
-    BackHandler(enabled = infoTab != null) { infoTab = null }
+    BackHandler(enabled = session.showAiIntro || infoTab != null || connecting) {
+        when {
+            session.showAiIntro -> session.finishAiIntro(enable = false)
+            infoTab != null -> infoTab = null
+            else -> connecting = false
+        }
+    }
 
     val target = when {
         !granted -> CommScreen.PERMISSION
+        session.showAiIntro -> CommScreen.AI_INTRO
         infoTab != null -> CommScreen.INFO
-        !showMain -> CommScreen.CONNECT
+        connecting -> CommScreen.CONNECT
         else -> CommScreen.MAIN
     }
     val reduce = motionReduced()
@@ -145,11 +157,15 @@ internal fun CommunicatorApp(
                 CommScreen.CONNECT -> ConnectScreen(
                     state = session.connectionState,
                     peerName = session.peerName,
-                    autoSearch = session.autoSearchEnabled,
                     onSearchAgain = session::searchAgain,
-                    onSkip = { showMain = true },
+                    onClose = { connecting = false },
                 )
-                CommScreen.MAIN -> MainScreen(session = session, onOpenInfo = { infoTab = it })
+                CommScreen.AI_INTRO -> AiIntroScreen(
+                    aiAvailable = true,
+                    onEnable = { session.finishAiIntro(enable = true) },
+                    onLater = { session.finishAiIntro(enable = false) },
+                )
+                CommScreen.MAIN -> MainScreen(session = session, onOpenInfo = { infoTab = it }, onConnect = openConnect)
             }
             }
         }
@@ -231,7 +247,7 @@ private fun PermissionScreen(denied: Boolean, onRequest: () -> Unit, onOpenSetti
             Modifier.size(96.dp).clip(RoundedCornerShape(32.dp)).background(c.surface).border(1.dp, c.border, RoundedCornerShape(32.dp)),
             contentAlignment = Alignment.Center,
         ) {
-            Icon(Icons.Default.Lock, contentDescription = null, tint = c.accent, modifier = Modifier.size(40.dp))
+            Icon(ContatoIcons.Lock, contentDescription = null, tint = c.accent, modifier = Modifier.size(40.dp))
         }
         Spacer(Modifier.height(24.dp))
         ToneChip(if (denied) "Permissão negada" else "Passo 1 de 2", if (denied) Tone.DANGER else Tone.INFO, c)
@@ -242,15 +258,15 @@ private fun PermissionScreen(denied: Boolean, onRequest: () -> Unit, onOpenSetti
             c,
         )
         BottomSheetCard(c) {
-            PermissionRow(Icons.Default.Phone, "Dispositivos próximos", "Para encontrar o celular tátil.", c)
+            PermissionRow(ContatoIcons.Smartphone, "Dispositivos próximos", "Para encontrar o celular tátil.", c)
             Spacer(Modifier.height(14.dp))
-            PermissionRow(Icons.Default.LocationOn, "Localização", "Pedida só em alguns Android para a busca. Nada é rastreado.", c)
+            PermissionRow(ContatoIcons.MapPin, "Localização", "Pedida só em alguns Android para a busca. Nada é rastreado.", c)
             Spacer(Modifier.height(20.dp))
             ArrowPill(if (denied) "Tentar de novo" else "Permitir", onRequest)
             if (denied) {
                 Spacer(Modifier.height(4.dp))
                 TextButton(onClick = onOpenSettings, modifier = Modifier.heightIn(min = 48.dp)) {
-                    Icon(Icons.Default.Settings, null, tint = c.accent, modifier = Modifier.size(18.dp))
+                    Icon(ContatoIcons.Settings, null, tint = c.accent, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(8.dp))
                     Text("Abrir configurações do app", color = c.accent, fontWeight = FontWeight.SemiBold)
                 }
@@ -275,18 +291,21 @@ private fun PermissionRow(icon: ImageVector, title: String, body: String, c: Com
 
 // ───────────────────────── Conexão ─────────────────────────
 
+/**
+ * Tela de conexão (aberta pelo "Conectar"), no estilo das referências de onboarding:
+ * barra de progresso em cima, ilustração, título grande e uma lista do que conferir.
+ */
 @Composable
 private fun ConnectScreen(
     state: ConnectionState,
     peerName: String?,
-    autoSearch: Boolean,
     onSearchAgain: () -> Unit,
-    onSkip: () -> Unit,
+    onClose: () -> Unit,
 ) {
     val c = rememberCommColors()
     val connected = state == ConnectionState.CONNECTED
-    val idle = state == ConnectionState.DISCONNECTED
     val failed = state == ConnectionState.CONNECTION_ERROR
+    val idle = state == ConnectionState.DISCONNECTED
     val step = when (state) {
         ConnectionState.SCANNING -> 0
         ConnectionState.DEVICE_FOUND, ConnectionState.CONNECTING, ConnectionState.RECONNECTING -> 1
@@ -294,47 +313,112 @@ private fun ConnectScreen(
         else -> -1
     }
     val peer = peerName ?: CommunicatorSession.DEFAULT_PEER
+    val reduce = motionReduced()
+    val fraction by animateFloatAsState(
+        when (step) { 0 -> 0.33f; 1 -> 0.66f; 2 -> 1f; else -> 0.12f },
+        if (reduce) tween(0) else tween(Motion.SLOW, easing = Motion.SmoothOut), label = "connectBar",
+    )
 
-    GlowScreen(c) {
-        Spacer(Modifier.height(24.dp))
-        PhonesIllustration(searching = step in 0..1, connected = connected, c = c)
-        Spacer(Modifier.height(20.dp))
-        AnimatedContent(targetState = connectionLabel(state, peerName), transitionSpec = { textSwapTransition() }, label = "chip") {
-            ToneChip(it, connectionTone(state), c, showCheck = connected)
+    Column(
+        Modifier
+            .fillMaxSize()
+            .background(c.bg)
+            .statusBarsPadding()
+            .navigationBarsPadding(),
+    ) {
+        // Topo: fechar + barra de progresso (referência).
+        Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                Modifier.size(48.dp).clip(CircleShape).clickable(role = Role.Button, onClickLabel = "Fechar", onClick = onClose),
+                contentAlignment = Alignment.Center,
+            ) { Icon(ContatoIcons.Close, contentDescription = "Fechar", tint = c.onSurface, modifier = Modifier.size(22.dp)) }
+            Spacer(Modifier.width(8.dp))
+            Box(Modifier.weight(1f).height(8.dp).clip(CircleShape).background(c.border)) {
+                Box(Modifier.fillMaxHeight().fillMaxWidth(fraction).clip(CircleShape).background(if (connected) c.online else c.accent))
+            }
+            Spacer(Modifier.width(20.dp))
         }
-        Spacer(Modifier.height(14.dp))
-        Title(
-            when {
-                connected -> "Tudo pronto!"
-                step == 1 -> "Quase lá..."
-                failed -> "Não deu certo desta vez"
-                idle && !autoSearch -> "Pronto para parear"
-                idle -> "Ainda não encontramos"
-                else -> "Procurando o celular tátil"
-            },
-            when {
-                connected -> "Você está conectado com $peer."
-                failed || idle && autoSearch -> "Confira se o outro celular está no modo Surdocego, perto deste e com o Bluetooth ligado."
-                idle -> "A busca automática está desligada. Toque em Parear agora para procurar."
-                else -> "Deixe os dois celulares próximos. No modo Surdocego, a busca começa sozinha."
-            },
-            c,
-        )
 
-        BottomSheetCard(c) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                StepSegment("Procurar", done = step > 0, current = step == 0, c = c, modifier = Modifier.weight(1f))
-                StepSegment("Conectar", done = step > 1, current = step == 1, c = c, modifier = Modifier.weight(1f))
-                StepSegment("Pronto", done = connected, current = false, c = c, modifier = Modifier.weight(1f))
+        Column(
+            Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp),
+        ) {
+            Illustration(R.drawable.ill_connect, Modifier.fillMaxWidth().height(230.dp))
+            Spacer(Modifier.height(8.dp))
+            AnimatedContent(targetState = connectionLabel(state, peerName), transitionSpec = { textSwapTransition() }, label = "chip") {
+                ToneChip(it, connectionTone(state), c, showCheck = connected)
             }
+            Spacer(Modifier.height(12.dp))
+            AnimatedContent(
+                targetState = when {
+                    connected -> "Tudo pronto!"
+                    step == 1 -> "Quase lá…"
+                    failed -> "Não deu certo desta vez"
+                    idle -> "Vamos conectar"
+                    else -> "Procurando o celular tátil"
+                },
+                transitionSpec = { textSwapTransition() }, label = "connectTitle",
+            ) { title ->
+                Text(title, color = c.onSurface, modifier = Modifier.semantics { heading(); liveRegion = LiveRegionMode.Polite },
+                    style = MaterialTheme.typography.headlineMedium.copy(fontSize = 30.sp, lineHeight = 36.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.3).sp))
+            }
+            Spacer(Modifier.height(8.dp))
+            Text(
+                if (connected) "Você está conectado com $peer. Abrindo a conversa…"
+                else "Os dois celulares conversam por Bluetooth, sem internet. Confira:",
+                color = c.muted,
+                style = MaterialTheme.typography.bodyLarge.copy(fontSize = 16.sp, lineHeight = 24.sp),
+            )
+            Spacer(Modifier.height(16.dp))
+            CheckItem(ContatoIcons.Smartphone, "Outro celular no modo Surdocego", "A busca começa sozinha por lá.", done = step >= 1, c = c)
+            Spacer(Modifier.height(10.dp))
+            CheckItem(ContatoIcons.Bluetooth, "Bluetooth ligado nos dois", "E a localização, se o Android pedir.", done = step >= 1, c = c)
+            Spacer(Modifier.height(10.dp))
+            CheckItem(ContatoIcons.Link, "Celulares perto um do outro", "Até alguns metros de distância.", done = connected, c = c)
+            Spacer(Modifier.height(16.dp))
+        }
+
+        // Rodapé com dois botões em pílula (referência).
+        Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            PillButton("Ver conversas", c, primary = false, modifier = Modifier.weight(1f), onClick = onClose)
             if (!connected) {
-                Spacer(Modifier.height(20.dp))
-                ArrowPill(if (idle && !autoSearch) "Parear agora" else "Procurar de novo", onSearchAgain)
-                Spacer(Modifier.height(4.dp))
-                TextButton(onClick = onSkip, modifier = Modifier.heightIn(min = 48.dp)) {
-                    Text("Ver conversas sem conectar", color = c.accent, fontWeight = FontWeight.SemiBold)
-                }
+                PillButton(if (step >= 0) "Procurar de novo" else "Procurar", c, primary = true, modifier = Modifier.weight(1f), onClick = onSearchAgain)
             }
+        }
+    }
+}
+
+/** Item da lista "Confira" (referência: cartão com ícone, título, texto e marcação à direita). */
+@Composable
+private fun CheckItem(icon: ImageVector, title: String, body: String, done: Boolean, c: CommColors) {
+    val reduce = motionReduced()
+    val border by animateColorAsState(if (done) c.accent else c.border, tween(if (reduce) 0 else Motion.FAST), label = "ckB")
+    val bg by animateColorAsState(if (done) c.accentSoft else c.surface, tween(if (reduce) 0 else Motion.FAST), label = "ckBg")
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(20.dp))
+            .background(bg)
+            .border(1.5.dp, border, RoundedCornerShape(20.dp))
+            .clearAndSetSemantics { contentDescription = "$title. $body" + if (done) ". Confirmado." else "" }
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(Modifier.size(42.dp).clip(CircleShape).background(c.bg), contentAlignment = Alignment.Center) {
+            Icon(icon, contentDescription = null, tint = c.accent, modifier = Modifier.size(20.dp))
+        }
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(title, color = c.onSurface, style = MaterialTheme.typography.titleSmall.copy(fontSize = 15.sp, fontWeight = FontWeight.Bold))
+            Text(body, color = c.muted, style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp, lineHeight = 18.sp))
+        }
+        Spacer(Modifier.width(8.dp))
+        Box(
+            Modifier.size(24.dp).clip(RoundedCornerShape(7.dp))
+                .background(if (done) c.accent else Color.Transparent)
+                .border(1.5.dp, if (done) c.accent else c.border, RoundedCornerShape(7.dp)),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (done) Icon(ContatoIcons.Check, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
         }
     }
 }
@@ -361,7 +445,7 @@ internal fun StepSegment(label: String, done: Boolean, current: Boolean, c: Comm
         Spacer(Modifier.height(8.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
             if (done) {
-                Icon(Icons.Default.Check, null, tint = c.online, modifier = Modifier.size(14.dp))
+                Icon(ContatoIcons.Check, null, tint = c.online, modifier = Modifier.size(14.dp))
                 Spacer(Modifier.width(4.dp))
             }
             Text(

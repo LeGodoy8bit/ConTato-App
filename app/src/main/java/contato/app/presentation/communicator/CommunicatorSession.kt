@@ -36,6 +36,7 @@ import contato.app.domain.repository.CommunicatorProfileRepository
 import contato.app.domain.repository.ConversationArchive
 import contato.app.domain.service.BrailleTextNormalizer
 import contato.app.domain.service.SimplificationRules
+import contato.app.domain.service.TimeEstimates
 import contato.app.domain.service.ConversationMerger
 import contato.app.domain.service.WireProtocol
 import contato.app.domain.state.ConnectionState
@@ -135,7 +136,8 @@ internal class CommunicatorSession(
 
     init {
         loadPhotoInBackground()
-        if (historyEnabled) conversations.addAll(archive.loadAll().sortedByDescending { it.updatedAt })
+        // merge com lista vazia também junta duplicadas antigas (ex.: duas "Letícia").
+        if (historyEnabled) conversations.addAll(ConversationMerger.merge(archive.loadAll(), emptyList()))
         if (account.isSignedIn && historyEnabled) pullCloud(pushAfter = false)
         if (aiEnabled) prepareAi()
     }
@@ -158,6 +160,76 @@ internal class CommunicatorSession(
             if (aiEnabled) aiStatus = result else simplifier.unload()
         }
     }
+
+    /** Apresentação da IA (páginas com ilustrações), mostrada uma vez depois de entrar na conta. */
+    var showAiIntro by mutableStateOf(false)
+        private set
+
+    fun openAiIntro() { showAiIntro = true }
+
+    /** Fim da apresentação: [enable] = a pessoa tocou em "Ativar a IA". */
+    fun finishAiIntro(enable: Boolean) {
+        showAiIntro = false
+        profile.setAiIntroSeen()
+        if (enable && !aiEnabled) updateAiEnabled(true)
+    }
+
+    // ───────── Tempo estimado (sentir a mensagem e receber a resposta) ─────────
+
+    /** O que mostrar acima do campo de texto: sentindo (com hora prevista de fim) ou aguardando resposta. */
+    sealed interface ChatEstimate {
+        data class Feeling(val messageId: String, val endsAt: Long) : ChatEstimate
+        data class Waiting(val since: Long, val typicalMs: Long) : ChatEstimate
+    }
+
+    var chatEstimate by mutableStateOf<ChatEstimate?>(null)
+        private set
+
+    /** Velocidade real da vibração no outro celular (1 = padrão), medida durante a leitura. */
+    private var feelScale = 1f
+    private var firstProgress: Triple<String, Int, Long>? = null
+    private var playedAt: Long? = null
+    private val replySamples = mutableListOf<Long>()
+
+    /** Tempo para sentir este texto, já na velocidade medida do outro celular. */
+    fun feelEstimateMs(text: String): Long = (TimeEstimates.feelMs(text) * feelScale).toLong()
+
+    private fun estimateOnSend(id: String, text: String) {
+        chatEstimate = ChatEstimate.Feeling(id, System.currentTimeMillis() + feelEstimateMs(text))
+    }
+
+    private fun estimateOnProgress(id: String, index: Int, text: String) {
+        val now = System.currentTimeMillis()
+        val first = firstProgress
+        if (first == null || first.first != id) {
+            firstProgress = Triple(id, index, now)
+        } else {
+            TimeEstimates.measureScale(text, first.second, index, now - first.third)?.let { feelScale = it }
+        }
+        chatEstimate = ChatEstimate.Feeling(id, now + TimeEstimates.remainingFeelMs(text, index, feelScale))
+    }
+
+    private fun estimateOnPlayed(id: String) {
+        // Só a última mensagem enviada conta para "aguardando resposta".
+        val last = messages.lastOrNull { it.sender == UserMode.COMMUNICATOR }
+        if (last?.id != id) return
+        playedAt = System.currentTimeMillis()
+        chatEstimate = ChatEstimate.Waiting(playedAt!!, TimeEstimates.typicalReplyMs(replySamples))
+    }
+
+    private fun estimateOnReply() {
+        playedAt?.let { replySamples += System.currentTimeMillis() - it }
+        playedAt = null
+        chatEstimate = null
+    }
+
+    // ───────── Tela de conexão (só quando a pessoa pede) ─────────
+
+    /** Aumenta quando conecta pela tela de conexão: a tela principal abre a conversa daquele aparelho. */
+    var openChatRequest by mutableStateOf(0)
+        private set
+
+    fun requestOpenChat() { openChatRequest++ }
 
     /** Se a IA está pronta e a frase é longa o bastante para valer a pena. */
     fun canSimplify(text: String): Boolean =
@@ -243,6 +315,7 @@ internal class CommunicatorSession(
             if (!historyEnabled) setHistory(true) // entrar para salvar já liga o "Guardar conversas"
             pullCloud(pushAfter = true)
             banner = Banner(BannerKind.SUCCESS, "Conta conectada", "Suas conversas agora ficam salvas na nuvem.")
+            if (!profile.isAiIntroSeen()) showAiIntro = true
         }
     }
 
@@ -355,6 +428,7 @@ internal class CommunicatorSession(
         messages += message
         nearby.sendMessage(WireProtocol.encode(WireMessage.Text(message.id, text)))
         updateStatus(message.id, MessageStatus.SENT)
+        estimateOnSend(message.id, text)
 
         conversation.transitionTo(ConversationState.SENT)
         conversation.transitionTo(ConversationState.WAITING_RESPONSE)
@@ -386,6 +460,7 @@ internal class CommunicatorSession(
         )
         messages += incoming
         commitActive(listOf(incoming))
+        estimateOnReply()
         conversation.transitionTo(ConversationState.RECEIVED)
         conversation.transitionTo(ConversationState.IDLE)
     }
@@ -400,11 +475,13 @@ internal class CommunicatorSession(
         val text = BrailleTextNormalizer.normalizeForBraille(message.content)
         progress[id] = PlaybackProgress(index, text)
         if (message.status != MessageStatus.PLAYING) updateStatus(id, MessageStatus.PLAYING)
+        estimateOnProgress(id, index, message.content)
     }
 
     private fun onPlayed(id: String) {
         progress.remove(id)
         updateStatus(id, MessageStatus.PLAYED)
+        estimateOnPlayed(id)
     }
 
     /** Conexão caiu: o que não foi confirmado vira "não enviada"; o que vibrava fica como entregue. */
@@ -421,6 +498,8 @@ internal class CommunicatorSession(
             changed += messages[i]
         }
         progress.clear()
+        chatEstimate = null
+        playedAt = null
         if (changed.isNotEmpty()) commitActive(changed)
     }
 
@@ -429,10 +508,22 @@ internal class CommunicatorSession(
         peerName = name
         val id = activeConversationId ?: return
         val i = conversations.indexOfFirst { it.id == id }
-        if (i >= 0 && conversations[i].peerName != name) {
-            conversations[i] = conversations[i].copy(peerName = name)
-            persist(conversations[i], emptyList())
+        if (i < 0 || conversations[i].peerName == name) return
+        // A conversa ativa leva as mensagens ao vivo antes de juntar.
+        val live = conversations.map { if (it.id == id) it.copy(messages = messages.toList()) else it }
+        val (list, newId) = ConversationMerger.renameActive(live, id, name)
+        conversations.clear()
+        conversations.addAll(list)
+        activeConversationId = newId
+        val active = list.first { it.id == newId }
+        if (newId != id) {
+            messages.clear()
+            messages.addAll(active.messages)
+            // A conversa que foi absorvida pode já estar na nuvem com o nome antigo: grava o nome
+            // novo nela, para a próxima sincronização juntar as duas de novo (e não duplicar).
+            if (historyEnabled) live.firstOrNull { it.id == id }?.let { account.push(it.copy(peerName = name), emptyList()) }
         }
+        persist(active, if (newId != id) active.messages else emptyList())
     }
 
     // ───────── Perfil e preferências ─────────
@@ -570,7 +661,7 @@ internal class CommunicatorSession(
                     markInFlightAfterDisconnect()
                     banner = Banner(
                         BannerKind.ERROR, "Conexão perdida",
-                        if (autoReconnect) "Procurando ${peerName ?: DEFAULT_PEER} de novo." else "Para conectar de novo, use Parear agora no Perfil.",
+                        if (autoReconnect) "Procurando ${peerName ?: DEFAULT_PEER} de novo." else "Para conectar de novo, toque em Conectar.",
                     )
                 }
                 peerName = null

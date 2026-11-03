@@ -33,16 +33,17 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import contato.app.domain.state.ConnectionState
+import androidx.compose.foundation.selection.toggleable
 
 /**
  * Aba Conexão: tudo sobre o pareamento num lugar só, sem travar o app numa tela de busca.
  *  - estado atual com a ilustração dos dois celulares e as etapas Procurar → Conectar → Pronto;
- *  - botão principal (Parear agora / Procurar de novo / Desconectar);
+ *  - botão principal (Conectar / Ver a conexão / Desconectar);
  *  - busca automática;
  *  - aparelhos com quem você já conversou.
  */
 @Composable
-internal fun ConnectionTab(session: CommunicatorSession, c: CommColors, onOpenConversation: (String) -> Unit) {
+internal fun ConnectionTab(session: CommunicatorSession, c: CommColors, onConnect: () -> Unit, onOpenConversation: (String) -> Unit) {
     val state = session.connectionState
     val connected = state == ConnectionState.CONNECTED
     val idle = state == ConnectionState.DISCONNECTED || state == ConnectionState.CONNECTION_ERROR
@@ -87,7 +88,7 @@ internal fun ConnectionTab(session: CommunicatorSession, c: CommColors, onOpenCo
                     connected -> "Você está conectado com $peer."
                     step >= 0 -> "Deixe os dois celulares próximos. No modo Surdocego, a busca começa sozinha."
                     session.autoSearchEnabled -> "Confira se o outro celular está no modo Surdocego, perto deste e com o Bluetooth ligado."
-                    else -> "A busca automática está desligada. Toque em Parear agora."
+                    else -> "A busca automática está desligada. Toque em Conectar."
                 },
                 color = c.muted, textAlign = TextAlign.Center,
                 modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
@@ -107,8 +108,8 @@ internal fun ConnectionTab(session: CommunicatorSession, c: CommColors, onOpenCo
                     }
                     PillButton("Desconectar", c, primary = false, modifier = Modifier.weight(1f), onClick = session::disconnect)
                 }
-                idle -> ArrowPill("Parear agora", session::searchAgain)
-                else -> PillButton("Procurar de novo", c, primary = false, modifier = Modifier.fillMaxWidth(), onClick = session::searchAgain)
+                idle -> ArrowPill("Conectar", onConnect)
+                else -> PillButton("Ver a conexão", c, primary = false, modifier = Modifier.fillMaxWidth(), onClick = onConnect)
             }
         }
 
@@ -116,7 +117,7 @@ internal fun ConnectionTab(session: CommunicatorSession, c: CommColors, onOpenCo
         CommCard(c) {
             Row(
                 Modifier
-                    .clickable(role = Role.Switch) { session.setAutoSearch(!session.autoSearchEnabled) }
+                    .toggleable(value = session.autoSearchEnabled, role = Role.Switch, onValueChange = { session.setAutoSearch(it) })
                     .padding(horizontal = 16.dp, vertical = 14.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -169,7 +170,7 @@ internal fun ConnectionTab(session: CommunicatorSession, c: CommColors, onOpenCo
                 }
             }
             Text(
-                "Para conectar com um destes, abra o ConTato no modo Surdocego no outro celular e toque em Parear agora.",
+                "Para conectar com um destes, abra o ConTato no modo Surdocego no outro celular e toque em Conectar.",
                 color = c.muted,
                 modifier = Modifier.padding(start = 4.dp, top = 8.dp),
                 style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp, lineHeight = 18.sp),

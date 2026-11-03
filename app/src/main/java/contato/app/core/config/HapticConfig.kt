@@ -21,7 +21,7 @@ object HapticConfig {
 
     // PAUSA ENTRE LETRAS (dentro da mesma palavra)
     const val DEFAULT_AMPLITUDE = 128 //Intensidade padrão da vibração (inicial)
-    const val MAX_MESSAGE_LENGTH = 50 //limite máximo da mensagem
+    const val MAX_MESSAGE_LENGTH = 80 //limite máximo da mensagem (letras e espaços)
 
 
 

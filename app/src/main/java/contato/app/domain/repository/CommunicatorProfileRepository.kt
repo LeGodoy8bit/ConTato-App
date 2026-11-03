@@ -24,4 +24,8 @@ interface CommunicatorProfileRepository {
     /** Se a IA sugere uma versão mais curta da mensagem antes de enviar. */
     fun isAiEnabled(): Boolean
     fun setAiEnabled(enabled: Boolean)
+
+    /** Se a apresentação da IA (mostrada depois do login) já foi vista. */
+    fun isAiIntroSeen(): Boolean
+    fun setAiIntroSeen()
 }

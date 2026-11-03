@@ -15,9 +15,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ExitToApp
-import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
@@ -52,6 +49,7 @@ import contato.app.domain.model.VibrationSpeed
 import contato.app.presentation.theme.ContatoIcons
 import contato.app.presentation.theme.Motion
 import kotlin.math.roundToInt
+import androidx.compose.foundation.selection.toggleable
 
 /**
  * Ajustes do Surdocego (feitos com a pessoa de apoio). Tudo vale na hora:
@@ -86,7 +84,7 @@ internal fun DeafblindSettingsScreen(session: DeafblindSession, colors: DbColors
                         Text("É o nome que o Comunicador vê.", color = colors.muted,
                             style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp))
                     }
-                    Icon(Icons.Default.Edit, contentDescription = null, tint = colors.accent)
+                    Icon(ContatoIcons.Edit, contentDescription = null, tint = colors.accent)
                 }
             }
 
@@ -198,7 +196,7 @@ private fun AccountCard(session: DeafblindSession, colors: DbColors) {
                         .background(colors.bg)
                         .border(1.dp, colors.border, CircleShape)
                         .clickable(enabled = account.isConfigured && !account.busy, role = Role.Button) { session.signIn(context) }
-                        .heightIn(min = 44.dp)
+                        .heightIn(min = 48.dp)
                         .padding(horizontal = 16.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
@@ -227,7 +225,7 @@ private fun AccountCard(session: DeafblindSession, colors: DbColors) {
                 Modifier.size(48.dp).clip(CircleShape).clickable(role = Role.Button, onClickLabel = "Sair da conta") { confirmSignOut = true },
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(Icons.AutoMirrored.Filled.ExitToApp, contentDescription = "Sair da conta", tint = colors.muted)
+                Icon(ContatoIcons.LogOut, contentDescription = "Sair da conta", tint = colors.muted)
             }
         }
     }
@@ -362,7 +360,8 @@ internal fun SettingSwitch(title: String, subtitle: String, checked: Boolean, co
     Row(
         Modifier
             .fillMaxWidth()
-            .clickable(role = Role.Switch, onClick = onToggle)
+            // toggleable: o leitor de tela diz "ativado/desativado" (com clickable não dizia).
+            .toggleable(value = checked, role = Role.Switch, onValueChange = { onToggle() })
             .padding(horizontal = 16.dp, vertical = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {

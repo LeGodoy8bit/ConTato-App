@@ -14,9 +14,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ExitToApp
-import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -112,7 +109,7 @@ private fun ConversationList(session: DeafblindSession, colors: DbColors, onBack
                                     style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp))
                             }
                         }
-                        RowAction(Icons.AutoMirrored.Filled.ExitToApp, "Sair da conta", colors.onBg) { confirmSignOut = true }
+                        RowAction(ContatoIcons.LogOut, "Sair da conta", colors.onBg) { confirmSignOut = true }
                     }
                 }
             }
@@ -134,7 +131,7 @@ private fun ConversationList(session: DeafblindSession, colors: DbColors, onBack
                     }
                 }
                 item(key = "clear") {
-                    RowAction(Icons.Default.Delete, "Apagar conversas", colors.error) { confirmClear = true }
+                    RowAction(ContatoIcons.Trash, "Apagar conversas", colors.error) { confirmClear = true }
                 }
             }
         }

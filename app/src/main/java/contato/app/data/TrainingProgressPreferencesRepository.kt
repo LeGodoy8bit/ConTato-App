@@ -14,9 +14,9 @@ class TrainingProgressPreferencesRepository(context: Context) : TrainingProgress
         preferences.edit().putInt("done_$moduleId", count).apply()
     }
 
-    override fun introSeen(): Boolean = preferences.getBoolean("intro_seen", false)
+    override fun introSeen(): Boolean = preferences.getBoolean("intro_seen_v2", false)
 
     override fun setIntroSeen() {
-        preferences.edit().putBoolean("intro_seen", true).apply()
+        preferences.edit().putBoolean("intro_seen_v2", true).apply()
     }
 }

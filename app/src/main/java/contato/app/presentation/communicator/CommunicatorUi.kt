@@ -20,11 +20,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -56,6 +51,9 @@ import contato.app.presentation.theme.ContatoNavy
 import contato.app.presentation.theme.Motion
 import contato.app.presentation.theme.motionReduced
 import kotlinx.coroutines.delay
+import contato.app.presentation.theme.ContatoIcons
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.platform.LocalAccessibilityManager
 
 // ───────────────────────── Cores do modo Comunicador ─────────────────────────
 
@@ -69,6 +67,8 @@ internal class CommColors(
     val nav: Color, val onNav: Color, val accent: Color, val accentSoft: Color,
     val online: Color, val searching: Color, val offline: Color,
     val dark: Boolean,
+    /** Vermelho de erro/apagar com contraste AA nos dois temas. */
+    val danger: Color = DangerRed,
 )
 
 internal val InkOnWhite = Color(0xFF131924)
@@ -80,15 +80,15 @@ internal fun rememberCommColors(dark: Boolean = isSystemInDarkTheme()): CommColo
         bg = ContatoDarkSurface, surface = Color(0xFF1E2838), onSurface = Color.White,
         muted = Color(0xFFB4C0D3), border = Color(0xFF2E3A4F),
         sent = ContatoBlue, onSent = Color.White, received = Color(0xFF2A3547), onReceived = Color.White,
-        nav = Color(0xFF0E141E), onNav = Color.White, accent = Color(0xFF5C97FF), accentSoft = Color(0xFF5C97FF).copy(alpha = 0.18f),
+        nav = Color(0xFF0E141E), onNav = Color.White, accent = Color(0xFF80AEFF), accentSoft = Color(0xFF5C97FF).copy(alpha = 0.18f),
         online = Color(0xFF4CC26A), searching = Color(0xFFF2C14E), offline = Color(0xFF8D9BB5),
-        dark = true,
+        dark = true, danger = Color(0xFFFFB4AB),
     ) else CommColors(
         bg = Color(0xFFF1F4FB), surface = Color.White, onSurface = ContatoNavy,
         muted = Color(0xFF5B6678), border = Color(0xFFE3E8F2),
         sent = ContatoBlue, onSent = Color.White, received = Color.White, onReceived = ContatoNavy,
-        nav = ContatoNavy, onNav = Color.White, accent = ContatoBlue, accentSoft = Color(0xFFE6EEFF),
-        online = Color(0xFF1E8E3E), searching = Color(0xFFB7791F), offline = Color(0xFF8D9BB5),
+        nav = ContatoNavy, onNav = Color.White, accent = ContatoBlue, accentSoft = Color(0xFFEDF3FF),
+        online = Color(0xFF18793A), searching = Color(0xFFB7791F), offline = Color(0xFF6F7C93),
         dark = false,
     )
 }
@@ -216,7 +216,7 @@ internal fun ToneChip(text: String, tone: Tone, c: CommColors, showCheck: Boolea
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (showCheck) {
-            Icon(Icons.Default.Check, null, tint = fg, modifier = Modifier.size(14.dp))
+            Icon(ContatoIcons.Check, null, tint = fg, modifier = Modifier.size(14.dp))
             Spacer(Modifier.width(4.dp))
         }
         AnimatedContent(targetState = text, transitionSpec = { textSwapTransition() }, label = "chip") { t ->
@@ -237,10 +237,13 @@ internal fun StatusChip(status: MessageStatus, progress: PlaybackProgress?, c: C
 @Composable
 internal fun BannerHost(banner: Banner?, onDismiss: () -> Unit, modifier: Modifier = Modifier) {
     var shown by remember { mutableStateOf<Banner?>(null) }
+    // Com TalkBack (ou "tempo para agir" maior nas configurações), o Android pede mais tempo: respeita.
+    val a11y = LocalAccessibilityManager.current
     LaunchedEffect(banner?.key) {
         if (banner != null) {
             shown = banner
-            delay(3500)
+            val base = if (banner.kind == BannerKind.ERROR) 6000L else 3500L
+            delay(a11y?.calculateRecommendedTimeoutMillis(base, containsIcons = true, containsText = true) ?: base)
             onDismiss()
         }
     }
@@ -265,7 +268,7 @@ internal fun BannerHost(banner: Banner?, onDismiss: () -> Unit, modifier: Modifi
         ) {
             Box(Modifier.size(40.dp).clip(CircleShape).background(Color.White), contentAlignment = Alignment.Center) {
                 Icon(
-                    if (b.kind == BannerKind.SUCCESS) Icons.Default.Check else Icons.Default.Warning,
+                    if (b.kind == BannerKind.SUCCESS) ContatoIcons.Check else ContatoIcons.Warning,
                     contentDescription = null, tint = bg, modifier = Modifier.size(22.dp),
                 )
             }
@@ -277,7 +280,7 @@ internal fun BannerHost(banner: Banner?, onDismiss: () -> Unit, modifier: Modifi
                     style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp, lineHeight = 18.sp))
             }
             IconButton(onClick = onDismiss) {
-                Icon(Icons.Default.Close, contentDescription = "Fechar aviso", tint = Color.White)
+                Icon(ContatoIcons.Close, contentDescription = "Fechar aviso", tint = Color.White)
             }
         }
     }
@@ -301,7 +304,7 @@ internal fun ArrowPill(text: String, onClick: () -> Unit, modifier: Modifier = M
         Text(text, color = Color.White, modifier = Modifier.weight(1f), textAlign = TextAlign.Center,
             style = MaterialTheme.typography.titleMedium.copy(fontSize = 17.sp, fontWeight = FontWeight.Bold))
         Box(Modifier.size(48.dp).clip(CircleShape).background(Color.White), contentAlignment = Alignment.Center) {
-            Icon(Icons.AutoMirrored.Filled.ArrowForward, null, tint = container, modifier = Modifier.size(22.dp))
+            Icon(ContatoIcons.ArrowRight, null, tint = container, modifier = Modifier.size(22.dp))
         }
     }
 }
@@ -312,7 +315,7 @@ internal fun SectionLabel(text: String, c: CommColors) {
         text,
         color = c.muted,
         style = MaterialTheme.typography.labelLarge.copy(fontSize = 13.sp, fontWeight = FontWeight.SemiBold),
-        modifier = Modifier.padding(start = 4.dp, bottom = 8.dp, top = 22.dp),
+        modifier = Modifier.padding(start = 4.dp, bottom = 8.dp, top = 22.dp).semantics { heading() },
     )
 }
 
@@ -335,7 +338,7 @@ internal fun ScreenHeading(text: String, c: CommColors, modifier: Modifier = Mod
         text,
         color = c.onSurface,
         style = MaterialTheme.typography.headlineMedium.copy(fontSize = 30.sp, lineHeight = 36.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.4).sp),
-        modifier = modifier,
+        modifier = modifier.semantics { heading() },
     )
 }
 
@@ -380,7 +383,7 @@ internal fun SegmentedTabs(options: List<String>, selected: Int, c: CommColors, 
                 Box(
                     Modifier
                         .weight(1f)
-                        .heightIn(min = 44.dp)
+                        .heightIn(min = 48.dp)
                         .clip(CircleShape)
                         .selectable(selected = i == selected, role = Role.Tab) { onSelect(i) },
                     contentAlignment = Alignment.Center,

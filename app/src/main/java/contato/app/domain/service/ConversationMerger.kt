@@ -3,6 +3,7 @@ package contato.app.domain.service
 import contato.app.domain.model.Conversation
 import contato.app.domain.model.Message
 import contato.app.domain.model.MessageStatus
+import java.text.Normalizer
 
 /**
  * Junta as conversas do aparelho com as da nuvem (ao entrar na conta ou abrir o app).
@@ -39,7 +40,37 @@ object ConversationMerger {
     fun mergeMessages(a: List<Message>, b: List<Message>): List<Message> =
         normalize((a + b).groupBy { it.id }.values.map { copies -> copies.maxByOrNull { rank(it.status) }!! })
 
-    fun peerKey(name: String): String = name.trim().lowercase()
+    /** "Letícia", " leticia " e "LETÍCIA" são o mesmo aparelho. */
+    fun peerKey(name: String): String =
+        Normalizer.normalize(name, Normalizer.Form.NFD)
+            .replace(Regex("\\p{M}+"), "")
+            .trim()
+            .replace(Regex("\\s+"), " ")
+            .lowercase()
+
+    /**
+     * O outro celular avisou o nome dele e a conversa ativa foi renomeada. Se já existia outra
+     * conversa com esse nome (ex.: antes de entrar na conta), junta as duas numa só — senão
+     * aparecem duas "Letícia" na lista. Fica o id da conversa mais antiga (a que já está na nuvem).
+     *
+     * @return a lista nova e o id da conversa ativa depois da junção.
+     */
+    fun renameActive(list: List<Conversation>, activeId: String, newName: String): Pair<List<Conversation>, String> {
+        val active = list.firstOrNull { it.id == activeId } ?: return list to activeId
+        val key = peerKey(newName)
+        val other = list.firstOrNull { it.id != activeId && peerKey(it.peerName) == key }
+        if (other == null) {
+            return list.map { if (it.id == activeId) it.copy(peerName = newName) else it } to activeId
+        }
+        val joined = other.copy(
+            peerName = newName,
+            messages = mergeMessages(other.messages, active.messages),
+            updatedAt = maxOf(other.updatedAt, active.updatedAt),
+            lastReadAt = maxOf(other.lastReadAt, active.lastReadAt),
+        )
+        val rest = list.filter { it.id != activeId && it.id != other.id }
+        return (listOf(joined) + rest).sortedByDescending { it.updatedAt } to other.id
+    }
 
     private fun normalize(messages: List<Message>): List<Message> =
         messages.sortedBy { it.timestamp }.takeLast(Conversation.MAX_MESSAGES)

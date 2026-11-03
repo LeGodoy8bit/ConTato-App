@@ -2,63 +2,75 @@ package contato.app.presentation.theme
 
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.addPathNodes
 import androidx.compose.ui.unit.dp
 
 /**
- * Ícones que não existem no material-icons-core. Desenhados aqui (traçados do Material Icons,
- * licença Apache 2.0) para não precisar da biblioteca material-icons-extended, que é bem pesada.
+ * Ícones do ConTato: traço arredondado (24 × 24, traço 2), no lugar dos ícones padrão do Android.
+ * Desenhos baseados no Lucide (lucide.dev, licença ISC — uso livre, mantendo este aviso).
+ * Ficam aqui dentro para não precisar de biblioteca nova (e não arriscar a versão do Kotlin).
+ * A cor vem do `tint` do Icon, como nos ícones do Material.
  */
 object ContatoIcons {
 
-    /** Balão de conversa com linhas (aba Conversas). */
-    val Chat: ImageVector by lazy {
-        icon("Chat", "M20,2H4c-1.1,0 -1.99,0.9 -1.99,2L2,22l4,-4h14c1.1,0 2,-0.9 2,-2V4c0,-1.1 -0.9,-2 -2,-2zM6,9h12v2H6V9zM14,14H6v-2h8v2zM18,8H6V6h12v2z")
-    }
+    val Check: ImageVector by lazy { stroke("Check", "M20 6 9 17 l-5 -5") }
+    val ChevronRight: ImageVector by lazy { stroke("ChevronRight", "m9 18 6 -6 -6 -6") }
+    val ChevronLeft: ImageVector by lazy { stroke("ChevronLeft", "m15 18 -6 -6 6 -6") }
+    val ChevronUp: ImageVector by lazy { stroke("ChevronUp", "m18 15 -6 -6 -6 6") }
+    val ChevronDown: ImageVector by lazy { stroke("ChevronDown", "m6 9 6 6 6 -6") }
+    val Close: ImageVector by lazy { stroke("Close", "M18 6 6 18", "m6 6 12 12") }
+    val Sparkles: ImageVector by lazy { stroke("Sparkles", "M9.937 15.5 A2 2 0 0 0 8.5 14.063 l-6.135 -1.582 a.5 .5 0 0 1 0 -.962 L8.5 9.936 A2 2 0 0 0 9.937 8.5 l1.582 -6.135 a.5 .5 0 0 1 .963 0 L14.063 8.5 A2 2 0 0 0 15.5 9.937 l6.135 1.581 a.5 .5 0 0 1 0 .964 L15.5 14.063 a2 2 0 0 0 -1.437 1.437 l-1.582 6.135 a.5 .5 0 0 1 -.963 0 z", "M20 3 v4", "M22 5 h-4", "M4 17 v2", "M5 18 H3") }
+    val Settings: ImageVector by lazy { stroke("Settings", "M12.22 2 h-.44 a2 2 0 0 0 -2 2 v.18 a2 2 0 0 1 -1 1.73 l-.43 .25 a2 2 0 0 1 -2 0 l-.15 -.08 a2 2 0 0 0 -2.73 .73 l-.22 .38 a2 2 0 0 0 .73 2.73 l.15 .1 a2 2 0 0 1 1 1.72 v.51 a2 2 0 0 1 -1 1.74 l-.15 .09 a2 2 0 0 0 -.73 2.73 l.22 .38 a2 2 0 0 0 2.73 .73 l.15 -.08 a2 2 0 0 1 2 0 l.43 .25 a2 2 0 0 1 1 1.73 V20 a2 2 0 0 0 2 2 h.44 a2 2 0 0 0 2 -2 v-.18 a2 2 0 0 1 1 -1.73 l.43 -.25 a2 2 0 0 1 2 0 l.15 .08 a2 2 0 0 0 2.73 -.73 l.22 -.39 a2 2 0 0 0 -.73 -2.73 l-.15 -.08 a2 2 0 0 1 -1 -1.74 v-.5 a2 2 0 0 1 1 -1.74 l.15 -.09 a2 2 0 0 0 .73 -2.73 l-.22 -.38 a2 2 0 0 0 -2.73 -.73 l-.15 .08 a2 2 0 0 1 -2 0 l-.43 -.25 a2 2 0 0 1 -1 -1.73 V4 a2 2 0 0 0 -2 -2 z", "M9 12 a3 3 0 1 0 6 0 a3 3 0 1 0 -6 0") }
+    val Lock: ImageVector by lazy { stroke("Lock", "M5 11 h14 a2 2 0 0 1 2 2 v7 a2 2 0 0 1 -2 2 h-14 a2 2 0 0 1 -2 -2 v-7 a2 2 0 0 1 2 -2 z", "M7 11 V7 a5 5 0 0 1 10 0 v4") }
+    val Info: ImageVector by lazy { stroke("Info", "M2 12 a10 10 0 1 0 20 0 a10 10 0 1 0 -20 0", "M12 16 v-4", "M12 8 h.01") }
+    val Plus: ImageVector by lazy { stroke("Plus", "M5 12 h14", "M12 5 v14") }
+    val LogOut: ImageVector by lazy { stroke("LogOut", "M9 21 H5 a2 2 0 0 1 -2 -2 V5 a2 2 0 0 1 2 -2 h4", "m16 17 5 -5 -5 -5", "M21 12 H9") }
+    val Warning: ImageVector by lazy { stroke("Warning", "m21.73 18 -8 -14 a2 2 0 0 0 -3.48 0 l-8 14 A2 2 0 0 0 4 21 h16 a2 2 0 0 0 1.73 -3", "M12 9 v4", "M12 17 h.01") }
+    val Refresh: ImageVector by lazy { stroke("Refresh", "M3 12 a9 9 0 0 1 9 -9 9.75 9.75 0 0 1 6.74 2.74 L21 8", "M21 3 v5 h-5", "M21 12 a9 9 0 0 1 -9 9 9.75 9.75 0 0 1 -6.74 -2.74 L3 16", "M8 16 H3 v5") }
+    val Smartphone: ImageVector by lazy { stroke("Smartphone", "M7 2 h10 a2 2 0 0 1 2 2 v16 a2 2 0 0 1 -2 2 h-10 a2 2 0 0 1 -2 -2 v-16 a2 2 0 0 1 2 -2 z", "M12 18 h.01") }
+    val Edit: ImageVector by lazy { stroke("Edit", "M21.174 6.812 a1 1 0 0 0 -3.986 -3.987 L3.842 16.174 a2 2 0 0 0 -.5 .83 l-1.321 4.352 a.5 .5 0 0 0 .623 .622 l4.353 -1.32 a2 2 0 0 0 .83 -.497 z", "m15 5 4 4") }
+    val Trash: ImageVector by lazy { stroke("Trash", "M3 6 h18", "M19 6 v14 c0 1 -1 2 -2 2 H7 c-1 0 -2 -1 -2 -2 V6", "M8 6 V4 c0 -1 1 -2 2 -2 h4 c1 0 2 1 2 2 v2", "M10 11 v6", "M14 11 v6") }
+    val Send: ImageVector by lazy { stroke("Send", "M14.536 21.686 a.5 .5 0 0 0 .937 -.024 l6.5 -19 a.496 .496 0 0 0 -.635 -.635 l-19 6.5 a.5 .5 0 0 0 -.024 .937 l7.93 3.18 a2 2 0 0 1 1.112 1.11 z", "m21.854 2.147 -10.94 10.939") }
+    val Search: ImageVector by lazy { stroke("Search", "M3 11 a8 8 0 1 0 16 0 a8 8 0 1 0 -16 0", "m21 21 -4.3 -4.3") }
+    val User: ImageVector by lazy { stroke("User", "M19 21 v-2 a4 4 0 0 0 -4 -4 H9 a4 4 0 0 0 -4 4 v2", "M8 7 a4 4 0 1 0 8 0 a4 4 0 1 0 -8 0") }
+    val Menu: ImageVector by lazy { stroke("Menu", "M4 12 h16", "M4 6 h16", "M4 18 h16") }
+    val MapPin: ImageVector by lazy { stroke("MapPin", "M20 10 c0 4.993 -5.539 10.193 -7.399 11.799 a1 1 0 0 1 -1.202 0 C9.539 20.193 4 14.993 4 10 a8 8 0 0 1 16 0", "M9 10 a3 3 0 1 0 6 0 a3 3 0 1 0 -6 0") }
+    val UserCircle: ImageVector by lazy { stroke("UserCircle", "M2 12 a10 10 0 1 0 20 0 a10 10 0 1 0 -20 0", "M9 10 a3 3 0 1 0 6 0 a3 3 0 1 0 -6 0", "M7 20.662 V19 a2 2 0 0 1 2 -2 h6 a2 2 0 0 1 2 2 v1.662") }
+    val ArrowRight: ImageVector by lazy { stroke("ArrowRight", "M5 12 h14", "m12 5 7 7 -7 7") }
+    val ArrowLeft: ImageVector by lazy { stroke("ArrowLeft", "m12 19 -7 -7 7 -7", "M19 12 H5") }
+    val ChatBubble: ImageVector by lazy { stroke("ChatBubble", "M7.9 20 A9 9 0 1 0 4 16.1 L2 22 Z") }
+    val Chat: ImageVector by lazy { stroke("Chat", "M7.9 20 A9 9 0 1 0 4 16.1 L2 22 Z", "M8 12 h.01", "M12 12 h.01", "M16 12 h.01") }
+    val Vibration: ImageVector by lazy { stroke("Vibration", "m2 8 2 2 -2 2 2 2 -2 2", "m22 8 -2 2 2 2 -2 2 2 2", "M9 5 h6 a1 1 0 0 1 1 1 v12 a1 1 0 0 1 -1 1 h-6 a1 1 0 0 1 -1 -1 v-12 a1 1 0 0 1 1 -1 z") }
+    val School: ImageVector by lazy { stroke("School", "M21.42 10.922 a1 1 0 0 0 -.019 -1.838 L12.83 5.18 a2 2 0 0 0 -1.66 0 L2.6 9.08 a1 1 0 0 0 0 1.832 l8.57 3.908 a2 2 0 0 0 1.66 0 z", "M22 10 v6", "M6 12.5 V16 a6 3 0 0 0 12 0 v-3.5") }
+    val Cloud: ImageVector by lazy { stroke("Cloud", "M17.5 19 H9 a7 7 0 1 1 6.71 -9 h1.79 a4.5 4.5 0 1 1 0 9 Z") }
+    val TouchApp: ImageVector by lazy { stroke("TouchApp", "M22 14 a8 8 0 0 1 -8 8", "M18 11 v-1 a2 2 0 0 0 -2 -2 a2 2 0 0 0 -2 2", "M14 10 V9 a2 2 0 0 0 -2 -2 a2 2 0 0 0 -2 2 v1", "M10 9.5 V4 a2 2 0 0 0 -2 -2 a2 2 0 0 0 -2 2 v10", "M18 11 a2 2 0 1 1 4 0 v3 a8 8 0 0 1 -8 8 h-2 c-2.8 0 -4.5 -.86 -5.99 -2.34 l-3.6 -3.6 a2 2 0 0 1 2.83 -2.82 L7 15") }
+    val Sensors: ImageVector by lazy { stroke("Sensors", "M4.9 19.1 C1 15.2 1 8.8 4.9 4.9", "M7.8 16.2 c-2.3 -2.3 -2.3 -6.1 0 -8.5", "M10 12 a2 2 0 1 0 4 0 a2 2 0 1 0 -4 0", "M16.2 7.8 c2.3 2.3 2.3 6.1 0 8.5", "M19.1 4.9 C23 8.8 23 15.1 19.1 19") }
+    val DoneAll: ImageVector by lazy { stroke("DoneAll", "M18 6 7 17 l-5 -5", "m22 10 -7.5 7.5 L13 16") }
+    val PhotoCamera: ImageVector by lazy { stroke("PhotoCamera", "M14.5 4 h-5 L7 7 H4 a2 2 0 0 0 -2 2 v9 a2 2 0 0 0 2 2 h16 a2 2 0 0 0 2 -2 V9 a2 2 0 0 0 -2 -2 h-3 l-2.5 -3 z", "M9 13 a3 3 0 1 0 6 0 a3 3 0 1 0 -6 0") }
+    val Clock: ImageVector by lazy { stroke("Clock", "M2 12 a10 10 0 1 0 20 0 a10 10 0 1 0 -20 0", "M12 6 v6 l4 2") }
+    val Link: ImageVector by lazy { stroke("Link", "M10 13 a5 5 0 0 0 7.54 .54 l3 -3 a5 5 0 0 0 -7.07 -7.07 l-1.72 1.71", "M14 11 a5 5 0 0 0 -7.54 -.54 l-3 3 a5 5 0 0 0 7.07 7.07 l1.71 -1.71") }
+    val Bluetooth: ImageVector by lazy { stroke("Bluetooth", "m7 7 10 10 -5 5 V2 l5 5 L7 17") }
+    val Heart: ImageVector by lazy { stroke("Heart", "M19 14 c1.49 -1.46 3 -3.21 3 -5.5 A5.5 5.5 0 0 0 16.5 3 c-1.76 0 -3 .5 -4.5 2 -1.5 -1.5 -2.74 -2 -4.5 -2 A5.5 5.5 0 0 0 2 8.5 c0 2.3 1.5 4.05 3 5.5 l7 7 Z") }
+    val Shield: ImageVector by lazy { stroke("Shield", "M20 13 c0 5 -3.5 7.5 -7.66 8.95 a1 1 0 0 1 -.67 -.01 C7.5 20.5 4 18 4 13 V6 a1 1 0 0 1 1 -1 c2 0 4.5 -1.2 6.24 -2.72 a1.17 1.17 0 0 1 1.52 0 C14.51 3.81 17 5 19 5 a1 1 0 0 1 1 1 z", "m9 12 2 2 4 -4") }
+    val Unlink: ImageVector by lazy { stroke("Unlink", "m18.84 12.25 1.72 -1.71 h-.02 a5.004 5.004 0 0 0 -.12 -7.07 5.006 5.006 0 0 0 -6.95 0 l-1.72 1.71", "m5.17 11.75 -1.71 1.71 a5.004 5.004 0 0 0 .12 7.07 5.006 5.006 0 0 0 6.95 0 l1.71 -1.71", "M8 2 v3", "M2 8 h3", "M16 22 v-3", "M22 16 h-3") }
 
-    /** Balão simples (lista vazia, avisos). */
-    val ChatBubble: ImageVector by lazy {
-        icon("ChatBubble", "M20,2H4c-1.1,0 -2,0.9 -2,2v18l4,-4h14c1.1,0 2,-0.9 2,-2V4c0,-1.1 -0.9,-2 -2,-2z")
+    private fun stroke(name: String, vararg paths: String): ImageVector {
+        val builder = ImageVector.Builder(
+            name = name, defaultWidth = 24.dp, defaultHeight = 24.dp, viewportWidth = 24f, viewportHeight = 24f,
+        )
+        paths.forEach { d ->
+            builder.addPath(
+                pathData = addPathNodes(d),
+                fill = null,
+                stroke = SolidColor(Color.Black),
+                strokeLineWidth = 2f,
+                strokeLineCap = StrokeCap.Round,
+                strokeLineJoin = StrokeJoin.Round,
+            )
+        }
+        return builder.build()
     }
-
-    /** Celular vibrando (ajustes de vibração). */
-    val Vibration: ImageVector by lazy {
-        icon("Vibration", "M0,15h2L2,9L0,9v6zM3,17h2L5,7L3,7v10zM22,9v6h2L24,9h-2zM19,17h2L21,7h-2v10zM16.5,3h-9C6.67,3 6,3.67 6,4.5v15c0,0.83 0.67,1.5 1.5,1.5h9c0.83,0 1.5,-0.67 1.5,-1.5v-15c0,-0.83 -0.67,-1.5 -1.5,-1.5zM16,19L8,19L8,5h8v14z")
-    }
-
-    /** Capelo (treino). */
-    val School: ImageVector by lazy {
-        icon("School", "M5,13.18v4L12,21l7,-3.82v-4L12,17l-7,-3.82zM12,3L1,9l11,6 9,-4.91V17h2V9L12,3z")
-    }
-
-    /** Nuvem (conta / salvar na nuvem). */
-    val Cloud: ImageVector by lazy {
-        icon("Cloud", "M19.35,10.04C18.67,6.59 15.64,4 12,4 9.11,4 6.6,5.64 5.35,8.04 2.34,8.36 0,10.91 0,14c0,3.31 2.69,6 6,6h13c2.76,0 5,-2.24 5,-5 0,-2.64 -2.05,-4.78 -4.65,-4.96z")
-    }
-
-    /** Dedo tocando (gesto de toque). */
-    val TouchApp: ImageVector by lazy {
-        icon("TouchApp", "M9,11.24V7.5C9,6.12 10.12,5 11.5,5S14,6.12 14,7.5v3.74c1.21,-0.81 2,-2.18 2,-3.74C16,5.01 13.99,3 11.5,3S7,5.01 7,7.5c0,1.56 0.79,2.93 2,3.74zM18.84,15.87l-4.54,-2.26c-0.17,-0.07 -0.35,-0.11 -0.54,-0.11H13v-6c0,-0.83 -0.67,-1.5 -1.5,-1.5S10,6.67 10,7.5v10.74l-3.43,-0.72c-0.08,-0.01 -0.15,-0.03 -0.24,-0.03 -0.31,0 -0.59,0.13 -0.79,0.33l-0.79,0.8 4.94,4.94c0.27,0.27 0.65,0.44 1.06,0.44h6.79c0.75,0 1.33,-0.55 1.44,-1.28l0.75,-5.27c0.01,-0.07 0.02,-0.14 0.02,-0.2 0,-0.62 -0.38,-1.16 -0.91,-1.38z")
-    }
-
-    /** Ondas saindo de um ponto (aba Conexão). */
-    val Sensors: ImageVector by lazy {
-        icon("Sensors", "M7.76,16.24C6.67,15.16 6,13.66 6,12s0.67,-3.16 1.76,-4.24l1.42,1.42C8.45,9.9 8,10.9 8,12c0,1.1 0.45,2.1 1.17,2.83l-1.41,1.41zM16.24,16.24l-1.42,-1.42C15.55,14.1 16,13.1 16,12s-0.45,-2.1 -1.17,-2.83l1.41,-1.41C17.33,8.84 18,10.34 18,12s-0.67,3.16 -1.76,4.24zM12,10c-1.1,0 -2,0.9 -2,2s0.9,2 2,2 2,-0.9 2,-2 -0.9,-2 -2,-2zM20,12c0,2.21 -0.9,4.21 -2.35,5.65l1.42,1.42C20.88,17.26 22,14.76 22,12s-1.12,-5.26 -2.93,-7.07l-1.42,1.42C19.1,7.79 20,9.79 20,12zM6.35,6.35L4.93,4.93C3.12,6.74 2,9.24 2,12s1.12,5.26 2.93,7.07l1.42,-1.42C4.9,16.21 4,14.21 4,12s0.9,-4.21 2.35,-5.65z")
-    }
-
-    /** Duas marcas de visto (mensagem sentida). */
-    val DoneAll: ImageVector by lazy {
-        icon("DoneAll", "M18,7l-1.41,-1.41 -6.34,6.34 1.41,1.41L18,7zM22.24,5.59L11.66,16.17 7.48,12l-1.41,1.41L11.66,19l12,-12 -1.42,-1.41zM0.41,13.41L6,19l1.41,-1.41L1.83,12 0.41,13.41z")
-    }
-
-    /** Câmera (trocar foto). */
-    val PhotoCamera: ImageVector by lazy {
-        icon("PhotoCamera", "M12,12m-3.2,0a3.2,3.2 0,1 1,6.4 0a3.2,3.2 0,1 1,-6.4 0M9,2L7.17,4H4c-1.1,0 -2,0.9 -2,2v12c0,1.1 0.9,2 2,2h16c1.1,0 2,-0.9 2,-2V6c0,-1.1 -0.9,-2 -2,-2h-3.17L15,2H9zM12,17c-2.76,0 -5,-2.24 -5,-5s2.24,-5 5,-5 5,2.24 5,5 -2.24,5 -5,5z")
-    }
-
-    private fun icon(name: String, path: String): ImageVector =
-        ImageVector.Builder(name = name, defaultWidth = 24.dp, defaultHeight = 24.dp, viewportWidth = 24f, viewportHeight = 24f)
-            .addPath(pathData = addPathNodes(path), fill = SolidColor(Color.Black))
-            .build()
 }
