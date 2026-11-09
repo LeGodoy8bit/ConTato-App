@@ -105,8 +105,8 @@ internal object LegalTexts {
             ),
             sec(
                 "11. Contato e legislação",
-                p("Dúvidas, sugestões e solicitações podem ser enviadas para [REVISAR: e-mail de contato]."),
-                p("Estes Termos são regidos pela legislação brasileira. Fica eleito o foro de [REVISAR: cidade/UF] para resolver eventuais conflitos, ressalvados os direitos do consumidor."),
+                p("Dúvidas, sugestões e solicitações podem ser enviadas para leticia.godoy9@aluno.unip.br."),
+                p("Estes Termos são regidos pela legislação brasileira. Fica eleito o foro de São Paulo (SP) para resolver eventuais conflitos, ressalvados os direitos do consumidor."),
             ),
         ),
     )
@@ -119,7 +119,7 @@ internal object LegalTexts {
         sections = listOf(
             sec(
                 "1. Quem é o responsável",
-                p("O responsável pelo tratamento dos dados é [REVISAR: nome do grupo/instituição]. Contato: [REVISAR: e-mail]."),
+                p("O responsável pelo tratamento dos dados é time ConTato Assitive Tecnology Contato: leticia.godoy9@aluno.unip.br."),
             ),
             sec(
                 "2. Quais dados o ConTato trata",

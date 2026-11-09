@@ -18,14 +18,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.Send
-import androidx.compose.material.icons.filled.Create
-import androidx.compose.material.icons.filled.Email
-import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.filled.Phone
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -61,6 +53,7 @@ import contato.app.presentation.common.OnboardingPage
 import contato.app.presentation.common.OnboardingPager
 import contato.app.presentation.theme.Motion
 import contato.app.presentation.theme.motionReduced
+import contato.app.presentation.theme.ContatoIcons
 
 internal enum class InfoTab { HOW, MATRIX }
 
@@ -81,7 +74,7 @@ internal fun InfoScreen(initialTab: InfoTab, onBack: () -> Unit, onPreviewLetter
             IconButton(onClick = onBack, modifier = Modifier.align(Alignment.CenterStart)) {
                 Box(Modifier.size(44.dp).clip(CircleShape).background(c.surface).border(1.dp, c.border, CircleShape),
                     contentAlignment = Alignment.Center) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Voltar", tint = c.onSurface)
+                    Icon(ContatoIcons.ArrowLeft, contentDescription = "Voltar", tint = c.onSurface)
                 }
             }
             Text("Sobre o ConTato", color = c.onSurface, modifier = Modifier.align(Alignment.Center).semantics { heading() },
@@ -184,7 +177,7 @@ private fun WriteIllustration(c: CommColors) {
                 Text("Escreva uma mensagem", color = c.muted, style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp))
                 Spacer(Modifier.width(10.dp))
                 Box(Modifier.size(28.dp).clip(CircleShape).background(c.sent), contentAlignment = Alignment.Center) {
-                    Icon(Icons.AutoMirrored.Filled.Send, null, tint = Color.White, modifier = Modifier.size(14.dp))
+                    Icon(ContatoIcons.Send, null, tint = Color.White, modifier = Modifier.size(14.dp))
                 }
             }
         }
@@ -305,11 +298,11 @@ private fun LetterDetail(letter: Char, c: CommColors, onFeel: () -> Unit) {
                 .clip(CircleShape)
                 .background(c.accentSoft)
                 .clickable(role = Role.Button, onClickLabel = "Sentir a letra $letter", onClick = onFeel)
-                .heightIn(min = 44.dp)
+                .heightIn(min = 48.dp)
                 .padding(horizontal = 16.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Icon(Icons.Default.Refresh, null, tint = c.accent, modifier = Modifier.size(18.dp))
+            Icon(ContatoIcons.Refresh, null, tint = c.accent, modifier = Modifier.size(18.dp))
             Spacer(Modifier.width(8.dp))
             Text("Sentir de novo", color = c.accent, style = MaterialTheme.typography.labelLarge.copy(fontSize = 15.sp, fontWeight = FontWeight.Bold))
         }

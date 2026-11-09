@@ -12,11 +12,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -32,6 +27,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
@@ -78,14 +74,15 @@ internal fun ProfileTab(session: CommunicatorSession, c: CommColors, onOpenInfo:
                             .clip(CircleShape)
                             .clickable(role = Role.Button, onClickLabel = "Trocar foto") {
                                 if (session.photo == null) pickPhoto() else photoMenu = true
-                            },
+                            }
+                            .semantics { contentDescription = "Foto de perfil" },
                     ) {
                         Avatar(session.displayName, 102.dp, c, photo = session.photo)
                     }
                     Box(
                         Modifier
                             .align(Alignment.BottomEnd)
-                            .size(36.dp)
+                            .size(48.dp)
                             .clip(CircleShape)
                             .background(c.sent)
                             .border(3.dp, c.surface, CircleShape)
@@ -100,7 +97,7 @@ internal fun ProfileTab(session: CommunicatorSession, c: CommColors, onOpenInfo:
                     Text(session.displayName, color = c.onSurface,
                         style = MaterialTheme.typography.titleLarge.copy(fontSize = 22.sp, lineHeight = 28.sp, fontWeight = FontWeight.Bold))
                     IconButton(onClick = { editingName = true }) {
-                        Icon(Icons.Default.Edit, contentDescription = "Editar nome", tint = c.accent, modifier = Modifier.size(20.dp))
+                        Icon(ContatoIcons.Edit, contentDescription = "Editar nome", tint = c.accent, modifier = Modifier.size(20.dp))
                     }
                 }
                 Text("Comunicador · aparece assim no celular tátil", color = c.muted,
@@ -117,9 +114,9 @@ internal fun ProfileTab(session: CommunicatorSession, c: CommColors, onOpenInfo:
         // ── Sobre ──
         SectionLabel("Sobre o ConTato", c)
         CommCard(c) {
-            LinkRow(Icons.Default.Info, "Como funciona", "Passo a passo, do texto à vibração.", c) { onOpenInfo(InfoTab.HOW) }
+            LinkRow(ContatoIcons.Info, "Como funciona", "Passo a passo, do texto à vibração.", c) { onOpenInfo(InfoTab.HOW) }
             HorizontalDivider(color = c.border, modifier = Modifier.padding(start = 66.dp))
-            LinkRow(Icons.Default.Phone, "Matriz Braille", "As 26 letras. Toque numa para sentir.", c) { onOpenInfo(InfoTab.MATRIX) }
+            LinkRow(ContatoIcons.Smartphone, "Matriz Braille", "As 26 letras. Toque numa para sentir.", c) { onOpenInfo(InfoTab.MATRIX) }
         }
     }
 
@@ -136,7 +133,7 @@ internal fun ProfileTab(session: CommunicatorSession, c: CommColors, onOpenInfo:
             title = { Text("Foto de perfil") },
             text = { Text("A foto fica só neste celular.") },
             confirmButton = { TextButton(onClick = { photoMenu = false; pickPhoto() }) { Text("Trocar foto", fontWeight = FontWeight.Bold) } },
-            dismissButton = { TextButton(onClick = { photoMenu = false; session.removePhoto() }) { Text("Remover", color = DangerRed) } },
+            dismissButton = { TextButton(onClick = { photoMenu = false; session.removePhoto() }) { Text("Remover", color = c.danger) } },
         )
     }
 }
@@ -170,7 +167,7 @@ internal fun LinkRow(icon: ImageVector, title: String, subtitle: String?, c: Com
                 Text(subtitle, color = c.muted, style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp, lineHeight = 18.sp))
             }
         }
-        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = c.muted)
+        Icon(ContatoIcons.ChevronRight, null, tint = c.muted)
     }
 }
 

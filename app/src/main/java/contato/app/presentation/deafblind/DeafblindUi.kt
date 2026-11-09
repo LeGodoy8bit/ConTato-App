@@ -13,14 +13,13 @@ import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.BiasAlignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
@@ -40,6 +39,7 @@ import androidx.compose.ui.unit.sp
 import contato.app.domain.model.DeafblindTheme
 import contato.app.presentation.theme.Motion
 import contato.app.presentation.theme.motionReduced
+import contato.app.presentation.theme.ContatoIcons
 
 // ───────────────────────── Cores ─────────────────────────
 
@@ -69,7 +69,7 @@ internal fun dbColors(theme: DeafblindTheme): DbColors = when (theme) {
         dotOn = Color(0xFF0057FF), onDotOn = Color.White, dotOff = Color(0xFFE5EEFD), dotOffBorder = Color(0xFF6E92D8),
         onDotOff = Color(0xFF3F5E96),
         gesture = Color(0xFFCCE0FC), onGesture = Color(0xFF0B2A5B), accent = Color(0xFF0057FF),
-        online = Color(0xFF1E8E3E), searching = Color(0xFFB7791F), error = Color(0xFFB3261E),
+        online = Color(0xFF18793A), searching = Color(0xFFB7791F), error = Color(0xFFB3261E),
         highlightBg = Color(0xFF0057FF), highlightFg = Color.White, dark = false,
         gridLine = Color(0xFFE3EAF6), dotGlow = Color(0xFF0057FF).copy(alpha = 0.16f),
     )
@@ -117,7 +117,7 @@ internal fun BrailleCell(
             Row(Modifier.weight(1f).fillMaxWidth()) {
                 for (col in 0..1) {
                     val index = col * 3 + row
-                    BrailleSquare(index, points[index], colors, dimmed, Modifier.weight(1f).fillMaxHeight()) { onToggle(index) }
+                    BrailleSquare(index, row, col, points[index], colors, dimmed, Modifier.weight(1f).fillMaxHeight()) { onToggle(index) }
                 }
             }
         }
@@ -125,12 +125,11 @@ internal fun BrailleCell(
 }
 
 @Composable
-private fun BrailleSquare(index: Int, active: Boolean, colors: DbColors, dimmed: Boolean, modifier: Modifier, onToggle: () -> Unit) {
+private fun BrailleSquare(
+    index: Int, row: Int, col: Int, active: Boolean, colors: DbColors, dimmed: Boolean,
+    modifier: Modifier, onToggle: () -> Unit,
+) {
     val reduce = motionReduced()
-    val wash by animateColorAsState(
-        if (active) colors.squareOn else colors.bg,
-        animationSpec = if (reduce) snap() else tween(Motion.FAST), label = "wash",
-    )
     val fill by animateColorAsState(
         if (active) colors.dotOn else colors.dotOff,
         animationSpec = if (reduce) snap() else tween(Motion.QUICK), label = "fill",
@@ -148,23 +147,40 @@ private fun BrailleSquare(index: Int, active: Boolean, colors: DbColors, dimmed:
         if (active) 1f else 0f,
         animationSpec = if (reduce) snap() else tween(Motion.FAST), label = "glow",
     )
+    // Bolas puxadas para o centro da grade: juntas parecem uma cela Braille de verdade,
+    // mas o quadrado inteiro (invisível) continua sendo a área de toque.
+    val align = BiasAlignment(
+        horizontalBias = if (col == 0) 0.7f else -0.7f,
+        verticalBias = when (row) { 0 -> 0.6f; 2 -> -0.6f; else -> 0f },
+    )
     BoxWithConstraints(
         modifier
-            .background(wash)
-            // A área inteira é tocável. Sempre ativa: antes da 1ª mensagem a sessão responde com a vibração de erro.
-            .toggleable(value = active, role = Role.Checkbox, onValueChange = { onToggle() })
+            // A área inteira é tocável, sem marca de toque (o quadrado é invisível).
+            // Sempre ativa: antes da 1ª mensagem a sessão responde com a vibração de erro.
+            .toggleable(
+                value = active,
+                interactionSource = null,
+                indication = null,
+                role = Role.Checkbox,
+                onValueChange = { onToggle() },
+            )
             .semantics {
                 contentDescription = "Ponto ${index + 1}"
-                stateDescription = if (active) "marcado" else "desmarcado"
+                stateDescription = when {
+                    active -> "marcado"
+                    dimmed -> "desmarcado, aguarde uma mensagem"
+                    else -> "desmarcado"
+                }
             },
-        contentAlignment = Alignment.Center,
+        contentAlignment = align,
     ) {
-        val dot = minOf(maxWidth, maxHeight) * 0.80f
-        val alpha = if (dimmed && !active) 0.55f else 1f
-        // Halo.
+        val dot = minOf(maxWidth, maxHeight) * 0.90f
+        // Antes da 1ª mensagem só o preenchimento fica mais apagado; o contorno continua visível.
+        val fillAlpha = if (dimmed && !active) 0.55f else 1f
+        // Halo (cabe dentro do quadrado).
         Box(
             Modifier
-                .size(dot * 1.12f)
+                .size(minOf(dot * 1.08f, minOf(maxWidth, maxHeight)))
                 .graphicsLayer { this.alpha = glow; scaleX = 0.9f + 0.1f * glow; scaleY = scaleX }
                 .clip(CircleShape)
                 .background(colors.dotGlow),
@@ -172,9 +188,9 @@ private fun BrailleSquare(index: Int, active: Boolean, colors: DbColors, dimmed:
         Box(
             Modifier
                 .size(dot)
-                .graphicsLayer { scaleX = scale; scaleY = scale; this.alpha = alpha }
+                .graphicsLayer { scaleX = scale; scaleY = scale }
                 .clip(CircleShape)
-                .background(fill)
+                .background(fill.copy(alpha = fill.alpha * fillAlpha))
                 .then(if (active) Modifier else Modifier.border(3.dp, ring, CircleShape)),
             contentAlignment = Alignment.Center,
         ) {
@@ -231,7 +247,7 @@ internal fun DbHeader(title: String, colors: DbColors, onBack: () -> Unit) {
                 .clickable(role = Role.Button, onClickLabel = "Voltar", onClick = onBack),
             contentAlignment = Alignment.Center,
         ) {
-            Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = "Voltar", tint = colors.onBg, modifier = Modifier.size(28.dp))
+            Icon(ContatoIcons.ChevronLeft, contentDescription = "Voltar", tint = colors.onBg, modifier = Modifier.size(28.dp))
         }
         Spacer(Modifier.width(14.dp))
         Text(title, color = colors.onBg, modifier = Modifier.semantics { heading() },

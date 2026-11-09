@@ -22,6 +22,11 @@ class HapticMessagePlaybackService(context: Context) {
         get() = hapticController.tuning
         set(value) { hapticController.tuning = value }
 
+    /** Medição de latência (CT24/CT25): chamado logo antes de vibrar uma mensagem. */
+    var beforeMessageVibrate: (() -> Unit)?
+        get() = hapticController.beforeMessageVibrate
+        set(value) { hapticController.beforeMessageVibrate = value }
+
     /** Repassa um padrão de vibração de sistema para o HapticController. */
     fun playSystemFeedback(pulses: List<HapticPulse>) {
         hapticController.playSystemFeedback(pulses)

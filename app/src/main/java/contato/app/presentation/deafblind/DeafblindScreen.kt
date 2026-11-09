@@ -30,14 +30,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowUp
-import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.Menu
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -63,6 +55,7 @@ import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
@@ -246,7 +239,16 @@ private fun SupportStrip(session: DeafblindSession, colors: DbColors) {
             .clip(RoundedCornerShape(16.dp))
             .background(colors.surface.copy(alpha = 0.7f))
             .padding(horizontal = 12.dp, vertical = 6.dp)
-            .semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite },
+            // Leitor de tela: um texto só, que muda quando chega mensagem ou muda a conexão/resposta —
+            // NÃO a cada letra que vibra (antes inundava o TalkBack e a linha braille).
+            .clearAndSetSemantics {
+                contentDescription = buildString {
+                    append(status)
+                    if (message != null) append(". Mensagem: ").append(message)
+                    if (session.composed.isNotEmpty()) append(". Resposta: ").append(session.composed)
+                }
+                liveRegion = LiveRegionMode.Polite
+            },
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(
@@ -259,7 +261,7 @@ private fun SupportStrip(session: DeafblindSession, colors: DbColors) {
                     style = MaterialTheme.typography.labelMedium.copy(fontSize = 12.sp, fontWeight = FontWeight.SemiBold))
             }
             if (playing && message != null && index >= 0) {
-                Text("letra ${index + 1}/${message.length}", color = colors.accent,
+                Text("letra ${index + 1}/${message.length}", color = colors.accent, modifier = Modifier.clearAndSetSemantics { },
                     style = MaterialTheme.typography.labelMedium.copy(fontSize = 12.sp, fontWeight = FontWeight.Bold))
             }
         }
@@ -280,7 +282,8 @@ private fun SupportStrip(session: DeafblindSession, colors: DbColors) {
                         }
                     }
                 }
-                Text(annotated, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                // Até 3 linhas: a mensagem de 80 letras aparece inteira, com a letra atual visível.
+                Text(annotated, maxLines = 3, overflow = TextOverflow.Ellipsis,
                     style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp))
             }
         }
@@ -288,7 +291,7 @@ private fun SupportStrip(session: DeafblindSession, colors: DbColors) {
             SmallLabel("Resposta", colors)
             Text(
                 if (session.composed.isEmpty()) "—" else "${session.composed}_",
-                color = colors.onBg, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                color = colors.onBg, maxLines = 3, overflow = TextOverflow.Ellipsis,
                 style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp),
             )
         }
@@ -297,7 +300,7 @@ private fun SupportStrip(session: DeafblindSession, colors: DbColors) {
 
 @Composable
 private fun SmallLabel(text: String, colors: DbColors) {
-    Text(text, color = colors.muted.copy(alpha = 0.8f), modifier = Modifier.width(70.dp),
+    Text(text, color = colors.muted, modifier = Modifier.width(70.dp),
         style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp))
 }
 
@@ -316,14 +319,15 @@ private fun BottomMenuBar(colors: DbColors, unread: Int, onMenu: () -> Unit) {
                 .clip(CircleShape)
                 .background(colors.surface)
                 .clickable(role = Role.Button, onClickLabel = "Abrir menu: treino, conversas, ajustes e conta", onClick = onMenu)
+                .semantics { if (unread > 0) stateDescription = "$unread mensagem(ns) nova(s)" }
                 .heightIn(min = 48.dp)
                 .padding(horizontal = 22.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Box {
-                Icon(Icons.Default.Menu, contentDescription = null, tint = colors.onBg, modifier = Modifier.size(22.dp))
+                Icon(ContatoIcons.Menu, contentDescription = null, tint = colors.onBg, modifier = Modifier.size(22.dp))
                 if (unread > 0) {
-                    Box(Modifier.align(Alignment.TopEnd).offset(x = 3.dp, y = (-2).dp).size(8.dp).clip(CircleShape).background(Color(0xFFFF5A5F)))
+                    Box(Modifier.align(Alignment.TopEnd).offset(x = 3.dp, y = (-2).dp).size(9.dp).clip(CircleShape).background(colors.error))
                 }
             }
             Spacer(Modifier.width(10.dp))
@@ -369,6 +373,8 @@ private fun GestureArea(session: DeafblindSession, colors: DbColors, modifier: M
             .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 12.dp)
             .clip(RoundedCornerShape(32.dp))
             .background(flash.value)
+            // Borda visível: quem tem baixa visão encontra onde começa a área de gestos.
+            .border(2.dp, colors.dotOffBorder.copy(alpha = 0.6f), RoundedCornerShape(32.dp))
             .pointerInput(Unit) {
                 detectTapGestures(onTap = { confirm() })
             }
@@ -406,10 +412,10 @@ private fun GestureArea(session: DeafblindSession, colors: DbColors, modifier: M
         if (session.settings.showGestureHints) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                 Hint(ContatoIcons.TouchApp, "toque", "confirma", colors)
-                Hint(Icons.AutoMirrored.Filled.KeyboardArrowLeft, "esquerda", "apaga", colors)
-                Hint(Icons.AutoMirrored.Filled.KeyboardArrowRight, "direita", "espaço", colors)
-                Hint(Icons.Default.KeyboardArrowUp, "cima", "envia", colors)
-                Hint(Icons.Default.KeyboardArrowDown, "baixo", "repete", colors)
+                Hint(ContatoIcons.ChevronLeft, "esquerda", "apaga", colors)
+                Hint(ContatoIcons.ChevronRight, "direita", "espaço", colors)
+                Hint(ContatoIcons.ChevronUp, "cima", "envia", colors)
+                Hint(ContatoIcons.ChevronDown, "baixo", "repete", colors)
             }
         }
     }
@@ -445,12 +451,13 @@ private fun EchoLine(echo: CommandEcho?, colors: DbColors, modifier: Modifier) {
             Text(
                 e?.text ?: "Área de gestos",
                 color = when {
-                    e == null -> colors.onGesture.copy(alpha = 0.22f)
+                    e == null -> colors.onGesture.copy(alpha = 0.55f)
                     e.ok -> colors.onGesture
                     else -> colors.error
                 },
                 textAlign = TextAlign.Center,
-                modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                // Só o comando é anunciado; o texto de espera não (senão o TalkBack o lê depois de cada gesto).
+                modifier = if (e != null) Modifier.semantics { liveRegion = LiveRegionMode.Polite } else Modifier.clearAndSetSemantics { },
                 style = MaterialTheme.typography.headlineSmall.copy(fontSize = 24.sp, lineHeight = 30.sp, fontWeight = FontWeight.Bold),
             )
         }
@@ -461,9 +468,10 @@ private fun EchoLine(echo: CommandEcho?, colors: DbColors, modifier: Modifier) {
 private fun Hint(icon: ImageVector, gesture: String, action: String, colors: DbColors) {
     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.clearAndSetSemantics { }) {
         // Bem apagado: é lembrete para a pessoa de apoio, não pode competir com o toque.
-        Icon(icon, null, tint = colors.onGesture.copy(alpha = 0.28f), modifier = Modifier.size(20.dp))
-        Text(gesture, color = colors.onGesture.copy(alpha = 0.28f), style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, fontWeight = FontWeight.Bold))
-        Text(action, color = colors.onGesture.copy(alpha = 0.22f), style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp))
+        // Discreto, mas legível (contraste mínimo de 3:1 para quem tem baixa visão).
+        Icon(icon, null, tint = colors.onGesture.copy(alpha = 0.6f), modifier = Modifier.size(20.dp))
+        Text(gesture, color = colors.onGesture.copy(alpha = 0.6f), style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp, fontWeight = FontWeight.Bold))
+        Text(action, color = colors.onGesture.copy(alpha = 0.6f), style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp))
     }
 }
 
@@ -490,7 +498,7 @@ private fun MenuSheet(session: DeafblindSession, colors: DbColors, onDismiss: ()
             MenuItem(ContatoIcons.Chat, "Conversas",
                 if (unread > 0) "$unread mensagem(ns) nova(s)" else "Histórico das conversas", colors) { go(DbScreen.CONVERSATIONS) }
             Spacer(Modifier.height(10.dp))
-            MenuItem(Icons.Default.Settings, "Ajustes", "Vibração, nome do celular, texto e cores", colors) { go(DbScreen.SETTINGS) }
+            MenuItem(ContatoIcons.Settings, "Ajustes", "Vibração, nome do celular, texto e cores", colors) { go(DbScreen.SETTINGS) }
             Spacer(Modifier.height(10.dp))
             val user = account.user
             if (user == null) {
@@ -531,7 +539,7 @@ private fun MenuItem(icon: ImageVector, title: String, subtitle: String, colors:
             Text(title, color = colors.onBg, style = MaterialTheme.typography.titleMedium.copy(fontSize = 19.sp, fontWeight = FontWeight.Bold))
             Text(subtitle, color = colors.muted, style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp, lineHeight = 20.sp))
         }
-        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = colors.muted)
+        Icon(ContatoIcons.ChevronRight, null, tint = colors.muted)
     }
 }
 
@@ -552,7 +560,7 @@ private fun PermissionScreen(denied: Boolean, colors: DbColors, onRequest: () ->
     ) {
         Spacer(Modifier.height(40.dp))
         Box(Modifier.size(96.dp).clip(RoundedCornerShape(32.dp)).background(colors.surface), contentAlignment = Alignment.Center) {
-            Icon(Icons.Default.Lock, null, tint = colors.accent, modifier = Modifier.size(40.dp))
+            Icon(ContatoIcons.Lock, null, tint = colors.accent, modifier = Modifier.size(40.dp))
         }
         Spacer(Modifier.height(24.dp))
         Text("Pessoa de apoio: permita a conexão", color = colors.onBg, textAlign = TextAlign.Center,

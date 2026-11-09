@@ -14,15 +14,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
-import androidx.compose.material.icons.automirrored.filled.Send
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -43,6 +34,7 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -60,6 +52,7 @@ import contato.app.domain.model.MessageStyle
 import contato.app.domain.model.UserMode
 import contato.app.domain.state.ConnectionState
 import contato.app.domain.service.SimplificationRules
+import contato.app.domain.service.TimeEstimates
 import contato.app.domain.repository.SimplifyResult
 import contato.app.presentation.theme.Motion
 import androidx.compose.animation.fadeIn
@@ -70,6 +63,9 @@ import contato.app.presentation.common.Mascot
 import contato.app.presentation.common.MascotMood
 import contato.app.presentation.theme.ContatoIcons
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.LiveRegionMode
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -137,6 +133,15 @@ internal fun ChatDetail(
             else ReadOnlyBar(conversation?.peerName ?: "este aparelho", c, onPair = session::searchAgain)
         }
 
+        // Leitor de tela: anuncia a resposta que acabou de chegar (só as que chegam com a conversa aberta).
+        val openedAt = remember(conversationId) { System.currentTimeMillis() }
+        val newReply = messages.lastOrNull { it.sender != UserMode.COMMUNICATOR }?.takeIf { it.timestamp > openedAt }
+        // Sempre presente (1 dp, invisível): o leitor de tela só anuncia quando o texto muda.
+        Box(Modifier.size(1.dp).semantics {
+            liveRegion = LiveRegionMode.Polite
+            contentDescription = newReply?.let { "Nova resposta: ${it.content}" } ?: ""
+        })
+
         Box(Modifier.weight(1f).fillMaxWidth().background(c.bg)) {
             if (messages.isEmpty()) {
                 EmptyChat(c, Modifier.align(Alignment.Center))
@@ -159,10 +164,14 @@ internal fun ChatDetail(
             }
         }
 
-        if (isActive) MessageInput(
-            enabled = canWrite, c = c, style = style, onSend = session::send,
-            canSimplify = session::canSimplify, onSimplify = session::simplify,
-        )
+        if (isActive) {
+            EstimateStrip(session.chatEstimate.takeIf { canWrite }, c)
+            MessageInput(
+                enabled = canWrite, c = c, style = style, onSend = session::send,
+                canSimplify = session::canSimplify, onSimplify = session::simplify,
+                feelEstimate = session::feelEstimateMs,
+            )
+        }
     }
 }
 
@@ -180,7 +189,7 @@ private fun ChatHeader(
             Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            CircleButton(Icons.AutoMirrored.Filled.KeyboardArrowLeft, "Voltar para as conversas", c, onClick = onBack)
+            CircleButton(ContatoIcons.ChevronLeft, "Voltar para as conversas", c, onClick = onBack)
             Spacer(Modifier.width(10.dp))
             PeerAvatar(name, 42.dp, c, online = isActive && state == ConnectionState.CONNECTED)
             Spacer(Modifier.width(10.dp))
@@ -200,7 +209,7 @@ private fun ChatHeader(
                         style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp, lineHeight = 18.sp))
                 }
             }
-            CircleButton(Icons.Default.Info, "Como funciona e matriz Braille", c, onClick = onOpenInfo)
+            CircleButton(ContatoIcons.Info, "Como funciona e matriz Braille", c, onClick = onOpenInfo)
         }
         androidx.compose.material3.HorizontalDivider(color = c.border)
     }
@@ -210,7 +219,7 @@ private fun ChatHeader(
 private fun CircleButton(icon: ImageVector, label: String, c: CommColors, onClick: () -> Unit) {
     Box(
         Modifier
-            .size(44.dp)
+            .size(48.dp) // área de toque mínima recomendada (48 × 48 dp)
             .clip(CircleShape)
             .border(1.dp, c.border, CircleShape)
             .clickable(role = Role.Button, onClickLabel = label, onClick = onClick),
@@ -257,7 +266,7 @@ private fun OfflineBar(state: ConnectionState, c: CommColors, onSearch: () -> Un
         )
         if (!searching) {
             TextButton(onClick = onSearch, modifier = Modifier.heightIn(min = 48.dp)) {
-                Icon(Icons.Default.Refresh, null, tint = c.accent, modifier = Modifier.size(18.dp))
+                Icon(ContatoIcons.Refresh, null, tint = c.accent, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(6.dp))
                 Text("Procurar", color = c.accent, fontWeight = FontWeight.Bold)
             }
@@ -321,7 +330,13 @@ private fun MessageBubble(message: Message, progress: PlaybackProgress?, c: Comm
         bottomStart = if (mine) 20.dp else 6.dp,
         bottomEnd = if (mine) 6.dp else 20.dp,
     )
-    Column(Modifier.fillMaxWidth(), horizontalAlignment = if (mine) Alignment.End else Alignment.Start) {
+    // Balão + status lidos juntos pelo leitor de tela, dizendo quem escreveu.
+    Column(
+        Modifier.fillMaxWidth().semantics(mergeDescendants = true) {
+            stateDescription = if (mine) "Você" else "Resposta"
+        },
+        horizontalAlignment = if (mine) Alignment.End else Alignment.Start,
+    ) {
         Box(
             Modifier
                 .widthIn(max = 300.dp)
@@ -360,7 +375,7 @@ private fun MetaLine(message: Message, progress: PlaybackProgress?, mine: Boolea
             Spacer(Modifier.width(6.dp))
             when (message.status) {
                 MessageStatus.SENDING, MessageStatus.SENT ->
-                    Icon(Icons.Default.Check, null, tint = c.muted, modifier = Modifier.size(14.dp))
+                    Icon(ContatoIcons.Check, null, tint = c.muted, modifier = Modifier.size(14.dp))
                 MessageStatus.DELIVERED ->
                     Icon(ContatoIcons.DoneAll, null, tint = c.muted, modifier = Modifier.size(15.dp))
                 MessageStatus.PLAYING -> Text(label, color = c.accent,
@@ -371,9 +386,9 @@ private fun MetaLine(message: Message, progress: PlaybackProgress?, mine: Boolea
                     Text("Sentida", color = c.accent, style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp, fontWeight = FontWeight.SemiBold))
                 }
                 MessageStatus.FAILED -> {
-                    Icon(Icons.Default.Warning, null, tint = DangerRed, modifier = Modifier.size(14.dp))
+                    Icon(ContatoIcons.Warning, null, tint = c.danger, modifier = Modifier.size(14.dp))
                     Spacer(Modifier.width(3.dp))
-                    Text("Não enviada", color = DangerRed, style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp, fontWeight = FontWeight.SemiBold))
+                    Text("Não enviada", color = c.danger, style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp, fontWeight = FontWeight.SemiBold))
                 }
             }
         }
@@ -386,7 +401,7 @@ private fun ProgressText(progress: PlaybackProgress, bubble: Color, textSp: Int)
     val text = buildAnnotatedString {
         progress.text.forEachIndexed { i, ch ->
             when {
-                i < progress.index -> withStyle(SpanStyle(color = Color.White.copy(alpha = 0.6f))) { append(ch) }
+                i < progress.index -> withStyle(SpanStyle(color = Color.White.copy(alpha = 0.85f))) { append(ch) }
                 i == progress.index -> withStyle(
                     SpanStyle(color = bubble, background = Color.White, fontWeight = FontWeight.Bold)
                 ) { append(if (ch == ' ') '·' else ch) }
@@ -419,6 +434,7 @@ private fun MessageInput(
     onSend: (String) -> Boolean,
     canSimplify: (String) -> Boolean,
     onSimplify: suspend (String) -> SimplifyResult,
+    feelEstimate: (String) -> Long,
 ) {
     var text by rememberSaveable { mutableStateOf("") }
     // IA: tudo fica preso à frase que gerou; se a pessoa continuar digitando, some sozinho.
@@ -486,13 +502,13 @@ private fun MessageInput(
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(
                 Modifier
-                    .size(44.dp)
+                    .size(48.dp)
                     .clip(CircleShape)
                     .border(1.dp, c.border, CircleShape)
                     .clickable(enabled = enabled, role = Role.Button, onClickLabel = "Frases rápidas") { showPhrases = true },
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(Icons.Default.Add, contentDescription = "Frases rápidas", tint = if (enabled) c.onSurface else c.muted)
+                Icon(ContatoIcons.Plus, contentDescription = "Frases rápidas", tint = if (enabled) c.onSurface else c.muted)
             }
             Spacer(Modifier.width(8.dp))
             Row(
@@ -521,8 +537,17 @@ private fun MessageInput(
                         modifier = Modifier.fillMaxWidth().semantics { contentDescription = "Mensagem" },
                     )
                 }
-                Text("${text.length}/${CommunicatorSession.MAX_LENGTH}", color = c.muted,
-                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 12.sp))
+                // Contador + quanto tempo a pessoa vai levar para sentir (antes mesmo de enviar).
+                val feel = if (trimmed.isEmpty()) 0L else feelEstimate(trimmed)
+                Column(horizontalAlignment = Alignment.End) {
+                    Text("${text.length}/${CommunicatorSession.MAX_LENGTH}", color = c.muted,
+                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 12.sp))
+                    if (feel > 0) {
+                        Text(TimeEstimates.friendly(feel), color = c.muted,
+                            modifier = Modifier.semantics { contentDescription = "Leva ${TimeEstimates.friendly(feel).removePrefix("~")} para sentir" },
+                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp))
+                    }
+                }
             }
             Spacer(Modifier.width(8.dp))
             Box(
@@ -533,7 +558,7 @@ private fun MessageInput(
                     .clickable(enabled = canSend, role = Role.Button, onClickLabel = "Enviar mensagem") { send() },
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Enviar",
+                Icon(ContatoIcons.Send, contentDescription = "Enviar",
                     tint = if (canSend) Color.White else c.muted, modifier = Modifier.size(22.dp))
             }
         }
@@ -594,7 +619,7 @@ private fun SimplifyChip(label: String, active: Boolean, c: CommColors, onClick:
     Row(
         Modifier
             .padding(start = 4.dp, bottom = 8.dp)
-            .heightIn(min = 40.dp)
+            .heightIn(min = 48.dp)
             .clip(CircleShape)
             .background(if (active) c.accentSoft else Color.Transparent)
             .clickable(enabled = active, role = Role.Button, onClickLabel = "Pedir uma versão mais curta", onClick = onClick)
@@ -602,7 +627,7 @@ private fun SimplifyChip(label: String, active: Boolean, c: CommColors, onClick:
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(
-            if (active) Icons.Default.Star else Icons.Default.Check, contentDescription = null,
+            if (active) ContatoIcons.Sparkles else ContatoIcons.Check, contentDescription = null,
             tint = if (active) c.accent else c.muted, modifier = Modifier.size(18.dp),
         )
         Spacer(Modifier.width(6.dp))
@@ -629,7 +654,7 @@ private fun AiSuggestionCard(
             .padding(horizontal = 16.dp, vertical = 12.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Default.Star, contentDescription = null, tint = c.accent, modifier = Modifier.size(16.dp))
+            Icon(ContatoIcons.Sparkles, contentDescription = null, tint = c.accent, modifier = Modifier.size(16.dp))
             Spacer(Modifier.width(6.dp))
             Text(
                 if (loading || suggestion == null) "Pensando numa versão mais curta…" else "Sugestão da IA",
@@ -649,6 +674,68 @@ private fun AiSuggestionCard(
                 PillButton("Usar", c, primary = true, modifier = Modifier.weight(1f)) { onUse(suggestion) }
                 PillButton("Manter a minha", c, primary = false, modifier = Modifier.weight(1f), onClick = onKeep)
             }
+        }
+    }
+}
+
+/**
+ * Faixa acima do campo de texto com o tempo estimado:
+ *  - enquanto a mensagem vibra: "Sentindo a mensagem · faltam ~12 s";
+ *  - depois: "Aguardando a resposta · costuma levar ~1 min" (aprende com as respostas anteriores).
+ */
+@Composable
+private fun EstimateStrip(estimate: CommunicatorSession.ChatEstimate?, c: CommColors) {
+    // Relógio que anda de 1 em 1 segundo só enquanto há estimativa na tela.
+    var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(estimate) {
+        while (estimate != null) {
+            now = System.currentTimeMillis()
+            delay(1000)
+        }
+    }
+    AnimatedContent(
+        targetState = estimate,
+        contentKey = { it?.javaClass },
+        transitionSpec = { fadeIn(tween(Motion.FAST)) togetherWith fadeOut(tween(Motion.QUICK)) },
+        label = "estimate",
+    ) { e ->
+        if (e == null) {
+            Spacer(Modifier.fillMaxWidth())
+            return@AnimatedContent
+        }
+        val (title, detail) = when (e) {
+            is CommunicatorSession.ChatEstimate.Feeling -> {
+                val left = e.endsAt - now
+                "Sentindo a mensagem" to if (left > 1500) "faltam ${TimeEstimates.friendly(left)}" else "quase lá"
+            }
+            is CommunicatorSession.ChatEstimate.Waiting -> {
+                val waited = now - e.since
+                "Aguardando a resposta" to if (waited < e.typicalMs) "costuma levar ${TimeEstimates.friendly(e.typicalMs)}"
+                else "a pessoa ainda está escrevendo"
+            }
+        }
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .background(c.surface)
+                .padding(start = 16.dp, end = 16.dp, top = 8.dp)
+                .clip(CircleShape)
+                .background(c.accentSoft)
+                // Leitor de tela: só o título (muda pouco) é anunciado; a contagem de segundos não.
+                .clearAndSetSemantics { contentDescription = title; liveRegion = LiveRegionMode.Polite }
+                .padding(horizontal = 14.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                if (e is CommunicatorSession.ChatEstimate.Feeling) ContatoIcons.Vibration else ContatoIcons.Clock,
+                contentDescription = null, tint = c.accent, modifier = Modifier.size(18.dp),
+            )
+            Spacer(Modifier.width(8.dp))
+            // Só o título é anunciado (muda pouco); a contagem não fica repetindo no leitor de tela.
+            Text(title, color = c.onSurface,
+                style = MaterialTheme.typography.labelLarge.copy(fontSize = 14.sp, fontWeight = FontWeight.SemiBold))
+            Text(" · $detail", color = c.muted, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                style = MaterialTheme.typography.labelLarge.copy(fontSize = 14.sp))
         }
     }
 }

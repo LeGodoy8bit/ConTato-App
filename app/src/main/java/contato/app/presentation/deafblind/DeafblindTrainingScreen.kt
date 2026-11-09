@@ -18,9 +18,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
@@ -54,6 +51,8 @@ import contato.app.presentation.common.OnboardingColors
 import contato.app.presentation.common.OnboardingPage
 import contato.app.presentation.common.OnboardingPager
 import contato.app.presentation.theme.Motion
+import contato.app.presentation.theme.ContatoIcons
+import androidx.compose.foundation.selection.toggleable
 
 /**
  * Treino em módulos:
@@ -126,12 +125,16 @@ private fun TrainingIntro(colors: DbColors, onDone: () -> Unit) {
             "O treino ensina a sentir o Braille pela vibração, no ritmo da pessoa. Você, pessoa de apoio, acompanha pela tela.",
         ) { Mascot(180.dp, mood = MascotMood.HAPPY) },
         OnboardingPage(
+            "Faça junto com a pessoa de apoio",
+            "O treino é feito em dupla. Você é a pessoa de apoio: lê a tela e usa os botões quando precisar. A pessoa surdocega sente a vibração e responde na cela e com os gestos.",
+        ) { Mascot(170.dp, mood = MascotMood.CALM) },
+        OnboardingPage(
             "Forte é ponto, fraco é liso",
             "Cada letra vibra os 6 pontos em ordem, de 1 a 6. Vibração forte: ponto em relevo. Vibração fraca: ponto liso.",
         ) { IntroCell(colors) },
         OnboardingPage(
             "Responda na cela",
-            "Depois de sentir, a pessoa marca os pontos nos quadrados e confere. Acerto e erro têm vibrações diferentes.",
+            "Depois de sentir, a pessoa marca os pontos e usa os mesmos gestos da conversa: toque confirma, ← apaga, → espaço, ↑ confere e ↓ repete. Acerto e erro têm vibrações diferentes.",
         ) { Mascot(170.dp, mood = MascotMood.FOCUSED) },
         OnboardingPage(
             "Três módulos",
@@ -233,7 +236,7 @@ private fun ModuleList(
                 Column(Modifier.weight(1f)) {
                     Text("Escolha um módulo", color = colors.onBg,
                         style = MaterialTheme.typography.titleLarge.copy(fontSize = 20.sp, fontWeight = FontWeight.Bold))
-                    Text("Comece pelas letras. Cada lição: sentir, responder e conferir.", color = colors.muted,
+                    Text("Faça com uma pessoa de apoio. Comece pelas letras: sentir, responder e conferir.", color = colors.muted,
                         style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp, lineHeight = 20.sp))
                 }
             }
@@ -277,9 +280,9 @@ private fun ModuleCard(module: TrainingModule, done: Int, colors: DbColors, onCl
                     style = MaterialTheme.typography.titleMedium.copy(fontSize = 18.sp, fontWeight = FontWeight.Bold))
             }
             if (done >= total) {
-                Icon(Icons.Default.Check, null, tint = colors.online)
+                Icon(ContatoIcons.Check, null, tint = colors.online)
             } else {
-                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = colors.muted)
+                Icon(ContatoIcons.ChevronRight, null, tint = colors.muted)
             }
         }
         Spacer(Modifier.height(8.dp))
@@ -425,7 +428,16 @@ private fun FeelStep(item: String, colors: DbColors, onFeelAgain: () -> Unit, on
                 }
             }
         }
-        Spacer(Modifier.height(20.dp))
+        Spacer(Modifier.height(16.dp))
+        // Mesmos gestos da conversa: ↓ repete (como "repetir a mensagem"), toque ou ↑ vai responder.
+        TrainingGesturePad(
+            colors = colors,
+            modifier = Modifier.heightIn(min = 104.dp),
+            tap = PadGesture("Responder", onAnswer),
+            up = PadGesture("Responder", onAnswer),
+            down = PadGesture("Repete", onFeelAgain),
+        )
+        Spacer(Modifier.height(12.dp))
         DbOutlineButton("Sentir de novo", colors, onClick = onFeelAgain)
         Spacer(Modifier.height(10.dp))
         DbButton("Responder na cela", colors, onClick = onAnswer)
@@ -460,12 +472,36 @@ private fun AnswerStep(
                     color = colors.onBg, style = MaterialTheme.typography.titleSmall.copy(fontSize = 15.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp))
                 if (reveal) Text("Certo: $item", color = colors.muted, style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp))
             }
-            Text("mostrar", color = colors.muted, style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp))
-            Switch(checked = reveal, onCheckedChange = { onReveal() }, colors = SwitchDefaults.colors(checkedTrackColor = colors.dotOn))
+            // Texto e chave juntos: o leitor de tela diz "Mostrar resposta, ativado/desativado".
+            Row(
+                Modifier
+                    .heightIn(min = 48.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .toggleable(value = reveal, role = Role.Switch, onValueChange = { onReveal() })
+                    .padding(start = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("mostrar", color = colors.muted, modifier = Modifier.semantics { contentDescription = "Mostrar resposta" },
+                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 12.sp))
+                Switch(checked = reveal, onCheckedChange = null, colors = SwitchDefaults.colors(checkedTrackColor = colors.dotOn))
+            }
         }
         Spacer(Modifier.height(10.dp))
         BrailleCell(points, colors, dimmed = false, onToggle = onToggle, modifier = Modifier.weight(1f).fillMaxWidth())
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(8.dp))
+        // Os mesmos gestos da conversa. Letra sozinha: o toque já confere.
+        val canCheck = if (singleLetter) points.any { it } else answer.isNotBlank() || points.any { it }
+        TrainingGesturePad(
+            colors = colors,
+            modifier = Modifier.heightIn(min = 96.dp),
+            tap = if (singleLetter) PadGesture("Confere") { if (canCheck) onCheck() else onConfirmLetter() }
+                  else PadGesture("Confirma", onConfirmLetter),
+            left = if (singleLetter) null else PadGesture("Apaga", onDelete),
+            right = if (singleLetter) null else PadGesture("Espaço", onSpace),
+            up = PadGesture("Confere") { if (canCheck) onCheck() else onConfirmLetter() },
+            down = PadGesture("Repete", onFeelAgain),
+        )
+        Spacer(Modifier.height(8.dp))
         if (!singleLetter) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 SmallAction("Apagar", colors, Modifier.weight(1f), onDelete)

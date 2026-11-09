@@ -34,6 +34,12 @@ class HapticController(context: Context) {
      */
     var tuning: HapticTuning = HapticTuning.DEFAULT
 
+    /**
+     * Só para a medição de latência (CT24/CT25, build debug): chamado logo antes do
+     * vibrator.vibrate de uma mensagem. Fica null no release.
+     */
+    var beforeMessageVibrate: (() -> Unit)? = null
+
     fun play(pattern: HapticPattern) {
         vibrate(HapticWaveformTuner.tune(waveformBuilder.buildCharacterWaveform(pattern), tuning))
     }
@@ -44,7 +50,7 @@ class HapticController(context: Context) {
      *         Usado pela tela de termos para saber quando o item terminou de vibrar.
      */
     fun playMessage(message: HapticMessage): Long {
-        return vibrate(HapticWaveformTuner.tune(waveformBuilder.buildMessageWaveform(message), tuning))
+        return vibrate(HapticWaveformTuner.tune(waveformBuilder.buildMessageWaveform(message), tuning), beforeMessageVibrate)
     }
 
     /**
@@ -60,9 +66,10 @@ class HapticController(context: Context) {
      * Waveform vazio (texto só com caracteres não suportados) é ignorado:
      * createWaveform lançaria exceção com listas vazias.
      */
-    private fun vibrate(waveform: HapticWaveform): Long {
+    private fun vibrate(waveform: HapticWaveform, beforeVibrate: (() -> Unit)? = null): Long {
         if (waveform.timings.isEmpty() || !vibrator.hasVibrator()) return 0L
         val effect = VibrationEffect.createWaveform(waveform.timings, waveform.amplitudes, -1)
+        beforeVibrate?.invoke()
         vibrator.vibrate(effect)
         return waveform.timings.sum()
     }

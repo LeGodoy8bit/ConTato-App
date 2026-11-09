@@ -39,6 +39,12 @@ class CommunicatorProfilePreferencesRepository(
         preferences.edit().putBoolean(KEY_AI, enabled).apply()
     }
 
+    override fun isAiIntroSeen(): Boolean = preferences.getBoolean(KEY_AI_INTRO, false)
+
+    override fun setAiIntroSeen() {
+        preferences.edit().putBoolean(KEY_AI_INTRO, true).apply()
+    }
+
     override fun getMessageStyle(): MessageStyle {
         val d = MessageStyle()
         return MessageStyle(
@@ -58,6 +64,7 @@ class CommunicatorProfilePreferencesRepository(
 
     companion object {
         private const val KEY_AI = "communicator_ai_simplify"
+        private const val KEY_AI_INTRO = "communicator_ai_intro_seen"
         private const val KEY_BUBBLE = "communicator_bubble_color"
         private const val KEY_TEXT_SIZE = "communicator_message_text_size"
         private const val KEY_SHOW_TIMES = "communicator_show_times"

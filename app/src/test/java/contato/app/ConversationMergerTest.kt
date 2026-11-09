@@ -47,4 +47,27 @@ class ConversationMergerTest {
         ), updatedAt = 20, lastReadAt = 10)
         assertEquals(1, c.unreadCount(UserMode.COMMUNICATOR))
     }
+
+    @Test
+    fun nomeComOuSemAcentoEhOMesmoAparelho() {
+        assertEquals(ConversationMerger.peerKey("Letícia"), ConversationMerger.peerKey("  leticia "))
+    }
+
+    @Test
+    fun renomearParaNomeQueJaExisteJuntaAsConversas() {
+        val antiga = Conversation("cloud-1", "Letícia", listOf(msg("a", 1)), updatedAt = 1)
+        val nova = Conversation("tmp-2", "Celular tátil (Pixel)", listOf(msg("b", 5)), updatedAt = 5)
+        val (list, active) = ConversationMerger.renameActive(listOf(nova, antiga), "tmp-2", "Letícia")
+        assertEquals(1, list.size)
+        assertEquals("cloud-1", active)
+        assertEquals(listOf("a", "b"), list[0].messages.map { it.id })
+    }
+
+    @Test
+    fun renomearSemConflitoSoTrocaONome() {
+        val c = Conversation("1", "Celular tátil", emptyList(), updatedAt = 1)
+        val (list, active) = ConversationMerger.renameActive(listOf(c), "1", "Letícia")
+        assertEquals("1", active)
+        assertEquals("Letícia", list.single().peerName)
+    }
 }

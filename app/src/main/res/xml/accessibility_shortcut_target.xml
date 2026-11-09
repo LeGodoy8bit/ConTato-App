@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Faz o ConTato aparecer em Configurações > Acessibilidade e poder ser escolhido para o
+  atalho dos botões de volume (segurar os dois por alguns segundos). Android 11 ou mais novo.
+  description e summary são obrigatórios: sem eles o Android ignora o atalho.
+-->
+<accessibility-shortcut-target xmlns:android="http://schemas.android.com/apk/res/android"
+    android:description="@string/a11y_shortcut_description"
+    android:summary="@string/a11y_shortcut_summary" />

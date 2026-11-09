@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Atalho de acessibilidade (Configurações > Acessibilidade > ConTato) -->
+    <string name="a11y_shortcut_label">ConTato · Modo Surdocego</string>
+    <string name="a11y_shortcut_summary">Abre o ConTato direto no modo Surdocego.</string>
+    <string name="a11y_shortcut_description">Escolha o atalho \"Manter as teclas de volume pressionadas\": ao segurar os dois botões de volume por alguns segundos, o ConTato abre no modo Surdocego e já começa a procurar o celular do Comunicador, sem precisar enxergar a tela.</string>
+    <!-- Atalho do ícone -->
+    <string name="shortcut_deafblind_short">Modo Surdocego</string>
+    <string name="shortcut_deafblind_long">Abrir no modo Surdocego</string>
+</resources>

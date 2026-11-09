@@ -8,7 +8,7 @@ import contato.app.domain.model.HapticTimelineStep
  * Calcula em que momento cada letra começa a vibrar.
  *
  * Usa exatamente as mesmas regras do HapticWaveformBuilder (duração de cada ponto
- * + POINT_PAUSE; CHARACTER_PAUSE entre letras; SPACE_PAUSE perto de espaços).
+ * + POINT_PAUSE; a pausa entre itens vem de HapticWaveformBuilder.pauseBetween).
  * É o que permite ao celular do Surdocego avisar o Comunicador "estou na letra 3 de 12"
  * no momento certo, sem medir nada no motor de vibração.
  */
@@ -29,12 +29,10 @@ class HapticTimelineBuilder(
 
             val isLast = index == patterns.lastIndex
             if (!isLast) {
-                val nextIsSpace = patterns[index + 1].events.isEmpty()
-                elapsed += if (pattern.events.isEmpty() || nextIsSpace) {
-                    HapticConfig.SPACE_PAUSE
-                } else {
-                    HapticConfig.CHARACTER_PAUSE
-                }
+                elapsed += HapticWaveformBuilder.pauseBetween(
+                    currentIsSpace = pattern.events.isEmpty(),
+                    nextIsSpace = patterns[index + 1].events.isEmpty()
+                )
             }
         }
 

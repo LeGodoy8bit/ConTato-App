@@ -1,5 +1,7 @@
 package contato.app.presentation.communicator
 
+import contato.app.R
+import contato.app.presentation.common.Illustration
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
@@ -18,11 +20,6 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -53,8 +50,6 @@ import androidx.compose.ui.unit.sp
 import contato.app.domain.model.Conversation
 import contato.app.domain.model.UserMode
 import contato.app.domain.state.ConnectionState
-import contato.app.presentation.common.Mascot
-import contato.app.presentation.common.MascotMood
 import contato.app.presentation.theme.ContatoIcons
 import contato.app.presentation.theme.Motion
 import java.text.SimpleDateFormat
@@ -101,9 +96,9 @@ internal fun ConversationsTab(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 ScreenHeading("Conversas", c, Modifier.weight(1f).semantics { heading() })
-                RoundIcon(Icons.Default.Info, "Como funciona e matriz Braille", c, onClick = onOpenInfo)
+                RoundIcon(ContatoIcons.Info, "Como funciona e matriz Braille", c, onClick = onOpenInfo)
                 Spacer(Modifier.width(8.dp))
-                RoundIcon(Icons.Default.Add, "Nova conexão", c, filled = true, onClick = onNewConnection)
+                RoundIcon(ContatoIcons.Plus, "Nova conexão", c, filled = true, onClick = onNewConnection)
             }
         }
         item(key = "search") {
@@ -170,7 +165,7 @@ internal fun ConversationsTab(
 private fun RoundIcon(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, c: CommColors, filled: Boolean = false, onClick: () -> Unit) {
     Box(
         Modifier
-            .size(44.dp)
+            .size(48.dp)
             .clip(CircleShape)
             .background(if (filled) c.onSurface else c.surface)
             .border(1.dp, if (filled) c.onSurface else c.border, CircleShape)
@@ -193,7 +188,7 @@ private fun SearchField(query: String, c: CommColors, onChange: (String) -> Unit
             .padding(horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(Icons.Default.Search, contentDescription = null, tint = c.muted, modifier = Modifier.size(20.dp))
+        Icon(ContatoIcons.Search, contentDescription = null, tint = c.muted, modifier = Modifier.size(20.dp))
         Spacer(Modifier.width(10.dp))
         Box(Modifier.weight(1f).padding(vertical = 12.dp)) {
             if (query.isEmpty()) Text("Buscar", color = c.muted, style = MaterialTheme.typography.bodyLarge.copy(fontSize = 16.sp))
@@ -208,7 +203,7 @@ private fun SearchField(query: String, c: CommColors, onChange: (String) -> Unit
         }
         if (query.isNotEmpty()) {
             IconButton(onClick = { onChange("") }) {
-                Icon(Icons.Default.Close, contentDescription = "Limpar busca", tint = c.muted, modifier = Modifier.size(18.dp))
+                Icon(ContatoIcons.Close, contentDescription = "Limpar busca", tint = c.muted, modifier = Modifier.size(18.dp))
             }
         }
     }
@@ -258,7 +253,7 @@ private fun DeviceChip(name: String, c: CommColors, online: Boolean, add: Boolea
     ) {
         if (add) {
             Box(Modifier.size(56.dp).clip(CircleShape).border(2.dp, c.border, CircleShape), contentAlignment = Alignment.Center) {
-                Icon(Icons.Default.Add, null, tint = c.accent)
+                Icon(ContatoIcons.Plus, null, tint = c.accent)
             }
         } else {
             Box(Modifier.size(60.dp).border(2.dp, if (online) c.sent else Color.Transparent, CircleShape).padding(3.dp)) {
@@ -302,13 +297,13 @@ private fun LoginNotice(c: CommColors, onLogin: () -> Unit, onClose: () -> Unit)
                     .clip(CircleShape)
                     .background(c.sent)
                     .clickable(role = Role.Button, onClickLabel = "Entrar com Google", onClick = onLogin)
-                    .heightIn(min = 40.dp)
+                    .heightIn(min = 48.dp)
                     .padding(horizontal = 20.dp, vertical = 10.dp),
                 style = MaterialTheme.typography.labelLarge.copy(fontSize = 14.sp, fontWeight = FontWeight.Bold),
             )
         }
         IconButton(onClick = onClose, modifier = Modifier.align(Alignment.Top)) {
-            Icon(Icons.Default.Close, contentDescription = "Fechar aviso", tint = c.muted, modifier = Modifier.size(20.dp))
+            Icon(ContatoIcons.Close, contentDescription = "Fechar aviso", tint = c.muted, modifier = Modifier.size(20.dp))
         }
     }
 }
@@ -379,7 +374,8 @@ private fun ConversationRow(conversation: Conversation, online: Boolean, c: Comm
 /** Avatar colorido pela inicial (cores fixas por nome) ou a foto, com a bolinha verde de conectado. */
 @Composable
 internal fun PeerAvatar(name: String, size: Dp, c: CommColors, online: Boolean, photo: ImageBitmap? = null) {
-    val palette = listOf(Color(0xFF2EC4B6), Color(0xFF3A86FF), Color(0xFFFFA62B), Color(0xFFEF5DA8), Color(0xFF8B5CF6), Color(0xFF22A06B))
+    // Tons escuros o bastante para a inicial branca ter contraste AA (≥ 4,5:1).
+    val palette = listOf(Color(0xFF0F766E), Color(0xFF1D4ED8), Color(0xFFB45309), Color(0xFFBE185D), Color(0xFF6D28D9), Color(0xFF15803D))
     val tint = palette[(name.hashCode() and Int.MAX_VALUE) % palette.size]
     val dot by animateColorAsState(if (online) c.online else Color.Transparent, tween(Motion.FAST), label = "online")
     Box(Modifier.size(size)) {
@@ -409,8 +405,8 @@ private fun EmptyConversations(c: CommColors, connected: Boolean, onPair: () -> 
         Modifier.fillMaxWidth().padding(horizontal = 32.dp, vertical = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Mascot(150.dp, mood = MascotMood.CURIOUS)
-        Spacer(Modifier.height(12.dp))
+        Illustration(R.drawable.ill_empty_chat, Modifier.fillMaxWidth().height(200.dp))
+        Spacer(Modifier.height(8.dp))
         Text("Nenhuma conversa ainda", color = c.onSurface, textAlign = TextAlign.Center,
             style = MaterialTheme.typography.titleLarge.copy(fontSize = 20.sp, fontWeight = FontWeight.Bold))
         Spacer(Modifier.height(6.dp))

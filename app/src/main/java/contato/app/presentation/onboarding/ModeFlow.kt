@@ -29,13 +29,6 @@ import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -92,6 +85,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import contato.app.presentation.theme.ContatoIcons
 
 /** TICK: toque leve. CONFIRM: pulso firme. ACCEPTED: pulso duplo (termos aceitos). */
 internal enum class HapticKind { TICK, CONFIRM, ACCEPTED }
@@ -224,8 +218,8 @@ internal fun ModeFlow(
                     onAccept = { onHaptic(HapticKind.ACCEPTED); onAccepted(UserMode.DEAFBLIND) },
                     onDecline = { onHaptic(HapticKind.TICK); step = Step.MODE },
                 )
-                Step.DOC_TERMS -> DocumentScreen(colors, k, LegalTexts.termsOfUse, Icons.Default.Info) { step = docBack }
-                Step.DOC_PRIVACY -> DocumentScreen(colors, k, LegalTexts.privacyPolicy, Icons.Default.Lock) { step = docBack }
+                Step.DOC_TERMS -> DocumentScreen(colors, k, LegalTexts.termsOfUse, ContatoIcons.Info) { step = docBack }
+                Step.DOC_PRIVACY -> DocumentScreen(colors, k, LegalTexts.privacyPolicy, ContatoIcons.Lock) { step = docBack }
             }
         }
     }
@@ -385,7 +379,7 @@ private fun bottomMargin(k: Float): Dp {
 private fun BackButton(tint: Color, onBack: () -> Unit) {
     Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp)) {
         IconButton(onClick = onBack) { // 48dp
-            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Voltar", tint = tint)
+            Icon(ContatoIcons.ArrowLeft, contentDescription = "Voltar", tint = tint)
         }
     }
 }
@@ -847,10 +841,10 @@ private fun TermsCommunicatorScreen(
         Spacer(Modifier.height(24.dp))
 
         BottomPanel(c, k) {
-            DocCard(c, Icons.Default.Info, "Termos de Uso",
+            DocCard(c, ContatoIcons.Info, "Termos de Uso",
                 "Conheça as regras de uso do ConTato e os limites do aplicativo.", onOpenTerms)
             Spacer(Modifier.height(12.dp))
-            DocCard(c, Icons.Default.Lock, "Política de Privacidade",
+            DocCard(c, ContatoIcons.Lock, "Política de Privacidade",
                 "Saiba quais informações são tratadas, para quê e quais são os seus direitos.", onOpenPrivacy)
             Spacer(Modifier.height(12.dp))
 
@@ -874,7 +868,7 @@ private fun TermsCommunicatorScreen(
                         ),
                     contentAlignment = Alignment.Center,
                 ) {
-                    if (agreed) Icon(Icons.Default.Check, null, tint = Color.White, modifier = Modifier.size(18.dp))
+                    if (agreed) Icon(ContatoIcons.Check, null, tint = Color.White, modifier = Modifier.size(18.dp))
                 }
                 Spacer(Modifier.width(16.dp))
                 Text(
@@ -918,7 +912,7 @@ private fun DocCard(c: FlowColors, icon: ImageVector, title: String, description
                 style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp, lineHeight = 20.sp))
         }
         Spacer(Modifier.width(8.dp))
-        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = c.onCard,
+        Icon(ContatoIcons.ChevronRight, contentDescription = null, tint = c.onCard,
             modifier = Modifier.size(24.dp))
     }
 }
@@ -1180,7 +1174,7 @@ private fun TouchPad(k: Float, active: Boolean) {
                 .background(Color.White, CircleShape),
             contentAlignment = Alignment.Center,
         ) {
-            Icon(Icons.Default.Phone, contentDescription = null, tint = ContatoNavy, modifier = Modifier.size(padSize * 0.2f))
+            Icon(ContatoIcons.Smartphone, contentDescription = null, tint = ContatoNavy, modifier = Modifier.size(padSize * 0.2f))
         }
     }
 }
@@ -1255,7 +1249,7 @@ private fun DocumentScreen(c: FlowColors, k: Float, doc: LegalDocument, icon: Im
         ) {
             Row(Modifier.fillMaxWidth().padding(8.dp)) {
                 IconButton(onClick = onBack) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Voltar", tint = c.onDocCard)
+                    Icon(ContatoIcons.ArrowLeft, contentDescription = "Voltar", tint = c.onDocCard)
                 }
             }
             Box(Modifier.size(u(56, k)).background(ContatoBlue, CircleShape), contentAlignment = Alignment.Center) {

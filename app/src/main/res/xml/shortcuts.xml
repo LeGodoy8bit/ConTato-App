@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Atalho ao tocar e segurar o ícone do app (e que pode ser arrastado para a tela inicial). -->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="modo_surdocego"
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutShortLabel="@string/shortcut_deafblind_short"
+        android:shortcutLongLabel="@string/shortcut_deafblind_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="contato.app"
+            android:targetClass="contato.app.presentation.DeafblindShortcutActivity" />
+    </shortcut>
+</shortcuts>

@@ -45,6 +45,14 @@ class NearbyConnectionService(
     // Nome que este aparelho apresenta ao pedir conexão (lado que busca).
     private var localDiscoveryName = DEFAULT_DISCOVERY_NAME
 
+    /**
+     * Instante (System.nanoTime) em que chegou o último payload. Usado só pela medição de
+     * latência (CT24/CT25): a sessão lê o valor logo em seguida, na mesma thread, dentro
+     * do onMessageReceived.
+     */
+    var lastPayloadAtNanos: Long = 0L
+        private set
+
     // Máquina de estados formal, seguindo os estados definidos na especificação.
     private val stateMachine = ConnectionStateMachine()
 
@@ -124,6 +132,7 @@ class NearbyConnectionService(
     private val payloadCallback = object : PayloadCallback() {
 
         override fun onPayloadReceived(endpointId: String, payload: Payload) {
+            lastPayloadAtNanos = System.nanoTime()
             if (payload.type == Payload.Type.BYTES) {
                 val message = payload.asBytes()?.let { String(it, Charsets.UTF_8) }
                 message?.let { listener.onMessageReceived(it) }

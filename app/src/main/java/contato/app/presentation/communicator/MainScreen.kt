@@ -3,6 +3,8 @@ package contato.app.presentation.communicator
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -16,9 +18,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -46,8 +45,8 @@ import contato.app.presentation.theme.motionReduced
 internal enum class MainTab(val label: String, val icon: ImageVector) {
     CHAT("Conversas", ContatoIcons.Chat),
     CONNECTION("Conexão", ContatoIcons.Sensors),
-    PROFILE("Perfil", Icons.Default.Person),
-    SETTINGS("Ajustes", Icons.Default.Settings),
+    PROFILE("Perfil", ContatoIcons.User),
+    SETTINGS("Ajustes", ContatoIcons.Settings),
 }
 
 /**
@@ -57,7 +56,7 @@ internal enum class MainTab(val label: String, val icon: ImageVector) {
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-internal fun MainScreen(session: CommunicatorSession, onOpenInfo: (InfoTab) -> Unit) {
+internal fun MainScreen(session: CommunicatorSession, onOpenInfo: (InfoTab) -> Unit, onConnect: () -> Unit) {
     val c = rememberCommColors()
     val reduce = motionReduced()
     var tab by rememberSaveable { mutableStateOf(MainTab.CHAT) }
@@ -72,6 +71,18 @@ internal fun MainScreen(session: CommunicatorSession, onOpenInfo: (InfoTab) -> U
     LaunchedEffect(session.activeConversationId, session.conversations.size) {
         val open = openConversation
         if (open != null && session.conversation(open) == null) openConversation = session.activeConversationId
+    }
+    // Conectou pela tela de conexão: abre a conversa daquele aparelho.
+    // (só pedidos novos: voltar de outra tela não reabre a conversa)
+    var handledOpenRequest by rememberSaveable { mutableIntStateOf(session.openChatRequest) }
+    LaunchedEffect(session.openChatRequest) {
+        if (session.openChatRequest > handledOpenRequest) {
+            handledOpenRequest = session.openChatRequest
+            if (session.activeConversationId != null) {
+                tab = MainTab.CHAT
+                openConversation = session.activeConversationId
+            }
+        }
     }
     val openId = openConversation?.takeIf { session.conversation(it) != null }
     BackHandler(enabled = openId != null) { openConversation = null }
@@ -107,9 +118,9 @@ internal fun MainScreen(session: CommunicatorSession, onOpenInfo: (InfoTab) -> U
                         openId = openId,
                         onOpen = { openConversation = it },
                         onOpenInfo = { onOpenInfo(InfoTab.HOW) },
-                        onNewConnection = { tab = MainTab.CONNECTION },
+                        onNewConnection = onConnect,
                     )
-                    MainTab.CONNECTION -> ConnectionTab(session, c, onOpenConversation = {
+                    MainTab.CONNECTION -> ConnectionTab(session, c, onConnect = onConnect, onOpenConversation = {
                         openConversation = it
                         tab = MainTab.CHAT
                     })
@@ -128,70 +139,88 @@ internal fun MainScreen(session: CommunicatorSession, onOpenInfo: (InfoTab) -> U
 // ───────────────────────── Barra inferior ─────────────────────────
 
 /**
- * Barra de baixo (referência de app de mensagens): fundo claro com linha fina em cima,
- * ícones com nome pequeno; a aba escolhida ganha uma pílula colorida atrás do ícone.
+ * Barra de baixo flutuante em pílula (referência de app de mensagens): fundo escuro,
+ * a aba escolhida vira uma pílula clara com ícone + nome; as outras mostram só o ícone.
  */
 @Composable
 private fun BottomBar(selected: MainTab, c: CommColors, unread: Int, onSelect: (MainTab) -> Unit) {
-    Column(Modifier.fillMaxWidth().background(c.surface)) {
-        HorizontalDivider(color = c.border)
+    val barBg = if (c.dark) Color(0xFF1C2433) else ContatoNavyBar
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .background(c.bg)
+            .navigationBarsPadding()
+            .padding(start = 20.dp, end = 20.dp, top = 6.dp, bottom = 10.dp),
+        contentAlignment = Alignment.Center,
+    ) {
         Row(
-            Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 8.dp, vertical = 6.dp),
-            horizontalArrangement = Arrangement.SpaceAround,
+            Modifier
+                .fillMaxWidth()
+                .clip(CircleShape)
+                .background(barBg)
+                .padding(6.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
             MainTab.entries.forEach { t ->
-                NavItem(t, selected == t, c, badge = if (t == MainTab.CHAT) unread else 0, modifier = Modifier.weight(1f)) { onSelect(t) }
+                NavItem(t, selected == t, c, badge = if (t == MainTab.CHAT) unread else 0) { onSelect(t) }
             }
         }
     }
 }
 
+private val ContatoNavyBar = Color(0xFF1E2838)
+
 @Composable
-private fun NavItem(tab: MainTab, selected: Boolean, c: CommColors, badge: Int, modifier: Modifier, onClick: () -> Unit) {
+private fun NavItem(tab: MainTab, selected: Boolean, c: CommColors, badge: Int, onClick: () -> Unit) {
     val reduce = motionReduced()
-    val pill by animateColorAsState(if (selected) c.accentSoft else Color.Transparent, tween(if (reduce) 0 else Motion.FAST), label = "navPill")
-    val tint by animateColorAsState(if (selected) c.accent else c.muted, tween(if (reduce) 0 else Motion.FAST), label = "navTint")
-    val pillWidth by animateDpAsState(if (selected) 60.dp else 40.dp, tween(if (reduce) 0 else Motion.FAST, easing = Motion.SmoothOut), label = "navW")
-    Column(
-        modifier
-            .clip(RoundedCornerShape(16.dp))
+    val pill by animateColorAsState(
+        if (selected) Color.White.copy(alpha = 0.14f) else Color.Transparent,
+        tween(if (reduce) 0 else Motion.FAST), label = "navPill",
+    )
+    val tint by animateColorAsState(
+        if (selected) Color.White else Color.White.copy(alpha = 0.62f),
+        tween(if (reduce) 0 else Motion.FAST), label = "navTint",
+    )
+    Row(
+        Modifier
+            .heightIn(min = 52.dp)
+            .clip(CircleShape)
+            .background(pill)
             .selectable(selected = selected, role = Role.Tab, onClick = onClick)
             .semantics { contentDescription = if (badge > 0) "${tab.label}, $badge não lidas" else tab.label }
-            .padding(vertical = 4.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
+            .animateContentSize(if (reduce) snap() else tween(Motion.FAST, easing = Motion.SmoothOut))
+            .padding(horizontal = if (selected) 18.dp else 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(
-            Modifier.width(pillWidth).height(32.dp).clip(CircleShape).background(pill),
-            contentAlignment = Alignment.Center,
-        ) {
-            Box {
-                Icon(tab.icon, contentDescription = null, tint = tint, modifier = Modifier.size(22.dp))
-                // Bolinha de não lidas: entra com um "pop" (transitions.dev "notification badge").
-                val badgeScale by animateFloatAsState(
-                    targetValue = if (badge > 0) 1f else 0f,
-                    animationSpec = tween(
-                        if (badge > 0) Motion.VERY_SLOW else Motion.QUICK,
-                        easing = if (badge > 0) Motion.Bounce else Motion.SmoothOut,
-                    ),
-                    label = "badge",
+        Box {
+            Icon(tab.icon, contentDescription = null, tint = tint, modifier = Modifier.size(22.dp))
+            // Bolinha de não lidas: entra com um "pop" (transitions.dev "notification badge").
+            val badgeScale by animateFloatAsState(
+                targetValue = if (badge > 0) 1f else 0f,
+                animationSpec = tween(
+                    if (badge > 0) Motion.VERY_SLOW else Motion.QUICK,
+                    easing = if (badge > 0) Motion.Bounce else Motion.SmoothOut,
+                ),
+                label = "badge",
+            )
+            if (badgeScale > 0.01f) {
+                Box(
+                    Modifier
+                        .align(Alignment.TopEnd)
+                        .offset(x = 4.dp, y = (-3).dp)
+                        .graphicsLayer { scaleX = badgeScale; scaleY = badgeScale }
+                        .size(10.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xFFFF5A5F)),
                 )
-                if (badgeScale > 0.01f) {
-                    Box(
-                        Modifier
-                            .align(Alignment.TopEnd)
-                            .offset(x = 4.dp, y = (-3).dp)
-                            .graphicsLayer { scaleX = badgeScale; scaleY = badgeScale }
-                            .size(10.dp)
-                            .clip(CircleShape)
-                            .background(Color(0xFFFF5A5F)),
-                    )
-                }
             }
         }
-        Spacer(Modifier.height(2.dp))
-        Text(tab.label, color = tint,
-            style = MaterialTheme.typography.labelSmall.copy(fontSize = 12.sp, fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium))
+        if (selected) {
+            Spacer(Modifier.width(8.dp))
+            Text(tab.label, color = tint, maxLines = 1,
+                style = MaterialTheme.typography.labelLarge.copy(fontSize = 14.sp, fontWeight = FontWeight.SemiBold))
+        }
     }
 }
 

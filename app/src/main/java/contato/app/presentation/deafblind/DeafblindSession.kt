@@ -12,6 +12,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import contato.app.core.connection.NearbyConnectionService
 import contato.app.core.connection.NearbyListener
+import contato.app.core.metrics.DebugLatency
+import contato.app.core.metrics.LatencyProbe
 import contato.app.core.vibration.HapticMessagePlaybackService
 import contato.app.domain.model.Conversation
 import contato.app.domain.model.DeafblindSettings
@@ -63,6 +65,9 @@ internal class DeafblindSession(
     private val timelineBuilder = HapticTimelineBuilder()
     private val handler = Handler(Looper.getMainLooper())
 
+    /** Medição de latência T1 (CT24/CT25). Só mede no build debug. */
+    private val latencyProbe = DebugLatency.createProbe(context, "surdocego")
+
     /** Nome padrão deste celular para o Comunicador: "Celular tátil (modelo)". */
     val defaultName = "${NearbyConnectionService.DEFAULT_DISCOVERY_NAME} (${Build.MODEL.take(18)})"
 
@@ -111,7 +116,10 @@ internal class DeafblindSession(
 
     init {
         playback.tuning = settings.tuning
-        if (settings.saveHistory) conversations.addAll(archive.loadAll().sortedByDescending { it.updatedAt })
+        if (latencyProbe !== LatencyProbe.None) {
+            playback.beforeMessageVibrate = { latencyProbe.beforeVibrate(System.nanoTime()) }
+        }
+        if (settings.saveHistory) conversations.addAll(ConversationMerger.merge(archive.loadAll(), emptyList()))
         if (account.isSignedIn && settings.saveHistory) pullCloud(pushAfter = false)
     }
 
@@ -424,10 +432,16 @@ internal class DeafblindSession(
         flipFeedback(flip)
     }
 
-    private fun flipFeedback(upsideDown: Boolean) =
+    private fun flipFeedback(upsideDown: Boolean) {
         feedback(if (upsideDown) SystemFeedbackEvent.SCREEN_UPSIDE_DOWN else SystemFeedbackEvent.SCREEN_UPRIGHT)
+        // Também na tela (pessoa de apoio e leitor de tela), não só na vibração.
+        echo = CommandEcho(if (upsideDown) "Tela de ponta-cabeça" else "Tela na posição normal", ok = true)
+    }
 
     private fun feedback(event: SystemFeedbackEvent) {
+        // Uma vibração nova substitui a que está tocando: durante uma mensagem, nenhum aviso
+        // (toque sem querer num ponto, mudança de conexão) pode cortar a leitura.
+        if (isPlaying) return
         playback.playSystemFeedback(SystemHapticPatterns.getPulsesFor(event))
     }
 
@@ -436,6 +450,8 @@ internal class DeafblindSession(
     private fun onIncomingText(wire: WireMessage.Text) {
         val normalized = BrailleTextNormalizer.normalizeForBraille(wire.text)
         if (normalized.isEmpty()) return
+        // Início de T1: instante em que o payload chegou (gravado pelo NearbyConnectionService).
+        latencyProbe.textArrived(wire.id, normalized.length, nearby.lastPayloadAtNanos)
         message = normalized
         lastReceivedId = wire.id
         if (modeStateMachine.currentState == DeafblindModeState.WAITING_MESSAGE) {
@@ -505,10 +521,17 @@ internal class DeafblindSession(
         peerName = name
         val id = activeConversationId ?: return
         val i = conversations.indexOfFirst { it.id == id }
-        if (i >= 0 && conversations[i].peerName != name) {
-            conversations[i] = conversations[i].copy(peerName = name)
-            persist(conversations[i], emptyList())
-        }
+        if (i < 0 || conversations[i].peerName == name) return
+        // Já existia conversa com esse nome? Junta as duas (não deixa duas iguais na lista).
+        val before = conversations[i]
+        val (list, newId) = ConversationMerger.renameActive(conversations.toList(), id, name)
+        // A absorvida pode já estar na nuvem com o nome antigo: renomeia lá também.
+        if (newId != id && settings.saveHistory) account.push(before.copy(peerName = name), emptyList())
+        conversations.clear()
+        conversations.addAll(list)
+        activeConversationId = newId
+        val active = list.first { it.id == newId }
+        persist(active, if (newId != id) active.messages else emptyList())
     }
 
     override fun onConnectionStatusChanged(status: String) = Unit
