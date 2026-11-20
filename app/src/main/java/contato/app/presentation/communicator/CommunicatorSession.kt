@@ -26,6 +26,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import contato.app.core.connection.NearbyConnectionService
 import contato.app.core.connection.NearbyListener
+import contato.app.core.metrics.DebugEvents
 import contato.app.core.metrics.DebugLatency
 import contato.app.core.metrics.LatencyTestPlan
 import contato.app.core.metrics.LatencyTestRunner
@@ -131,6 +132,9 @@ internal class CommunicatorSession(
 
     /** T2: envio da mensagem → chegada da confirmação R. */
     private val latencyProbe = DebugLatency.createProbe(context, "comunicador")
+
+    /** Registro de eventos dos testes técnicos (C4). Só no build debug; no release não faz nada. */
+    private val events = DebugEvents.create(context, "comunicador")
 
     /** Teste automático (30 envios por tamanho), iniciado pelo adb. Não aparece na interface. */
     private val latencyTest = LatencyTestRunner(
@@ -384,11 +388,13 @@ internal class CommunicatorSession(
         if (started) return
         started = true
         autoReconnect = autoSearchEnabled
+        events.log("SESSAO_INICIO", detalhe = "busca_auto=$autoSearchEnabled")
         if (autoSearchEnabled) nearby.startAdvertising(displayName)
     }
 
     /** Modo de pareamento ("Parear agora"): recomeça a busca do zero, mesmo com a busca automática desligada. */
     fun searchAgain() {
+        events.log("BUSCA_MANUAL")
         autoReconnect = true
         handler.removeCallbacksAndMessages(RECONNECT_TOKEN)
         if (nearby.getCurrentState() != ConnectionState.DISCONNECTED) nearby.stop()
@@ -397,6 +403,7 @@ internal class CommunicatorSession(
 
     /** Botão "Desconectar": encerra e NÃO volta a procurar sozinho. */
     fun disconnect() {
+        events.log("DESCONECTAR_MANUAL")
         autoReconnect = false
         handler.removeCallbacksAndMessages(RECONNECT_TOKEN)
         nearby.stop()
@@ -465,6 +472,7 @@ internal class CommunicatorSession(
         val wire = WireProtocol.encode(WireMessage.Text(message.id, text))
         latencyProbe.textSent(message.id, normalized.length, System.nanoTime()) // início de T2
         nearby.sendMessage(wire)
+        events.log("ENVIO", message.id, "tam=${normalized.length};texto=$text")
         updateStatus(message.id, MessageStatus.SENT)
         estimateOnSend(message.id, text)
 
@@ -487,7 +495,10 @@ internal class CommunicatorSession(
 
     private fun onIncomingText(wire: WireMessage.Text) {
         // A mesma mensagem nunca entra duas vezes (a lista usa o id como chave).
-        if (wire.id.isNotEmpty() && messages.any { it.id == wire.id }) return
+        if (wire.id.isNotEmpty() && messages.any { it.id == wire.id }) {
+            events.log("RESPOSTA_DUPLICADA", wire.id)
+            return
+        }
         conversation.transitionTo(ConversationState.RECEIVING)
         val incoming = Message(
             id = wire.id.ifEmpty { UUID.randomUUID().toString() },
@@ -497,6 +508,7 @@ internal class CommunicatorSession(
             status = MessageStatus.DELIVERED,
         )
         messages += incoming
+        events.log("RESPOSTA_RECEBIDA", incoming.id, "tam=${BrailleTextNormalizer.normalizeForBraille(wire.text).length};texto=${wire.text}")
         commitActive(listOf(incoming))
         estimateOnReply()
         conversation.transitionTo(ConversationState.RECEIVED)
@@ -505,11 +517,13 @@ internal class CommunicatorSession(
 
     private fun onReceived(id: String) {
         latencyProbe.receiptArrived(id, nearby.lastPayloadAtNanos) // fim de T2
+        events.log("R_RECEBIDA", id)
         val current = messages.firstOrNull { it.id == id }?.status ?: return
         if (current.ordinal < MessageStatus.DELIVERED.ordinal) updateStatus(id, MessageStatus.DELIVERED)
     }
 
     private fun onProgress(id: String, index: Int) {
+        events.log("P_PROGRESSO", id, "indice=$index")
         val message = messages.firstOrNull { it.id == id } ?: return
         val text = BrailleTextNormalizer.normalizeForBraille(message.content)
         progress[id] = PlaybackProgress(index, text)
@@ -518,6 +532,7 @@ internal class CommunicatorSession(
     }
 
     private fun onPlayed(id: String) {
+        events.log("D_CONCLUIDA", id)
         progress.remove(id)
         updateStatus(id, MessageStatus.PLAYED)
         estimateOnPlayed(id)
@@ -533,6 +548,7 @@ internal class CommunicatorSession(
                 MessageStatus.PLAYING -> MessageStatus.DELIVERED
                 else -> null
             } ?: continue
+            events.log(if (next == MessageStatus.FAILED) "FALHA" else "INTERROMPIDA_NA_QUEDA", m.id, "status_anterior=${m.status}")
             messages[i] = m.copy(status = next)
             changed += messages[i]
         }
@@ -681,6 +697,7 @@ internal class CommunicatorSession(
     override fun onConnectionStateChanged(state: ConnectionState) {
         val wasConnected = connectionState == ConnectionState.CONNECTED
         connectionState = state
+        events.log("CONEXAO", detalhe = "estado=$state" + (nearby.getConnectedEndpointName()?.let { ";par=$it" } ?: ""))
 
         when (state) {
             ConnectionState.CONNECTED -> {

@@ -12,6 +12,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import contato.app.core.connection.NearbyConnectionService
 import contato.app.core.connection.NearbyListener
+import contato.app.core.metrics.DebugEvents
 import contato.app.core.metrics.DebugLatency
 import contato.app.core.metrics.LatencyProbe
 import contato.app.core.vibration.HapticMessagePlaybackService
@@ -67,6 +68,13 @@ internal class DeafblindSession(
 
     /** Medição de latência T1 (CT24/CT25). Só mede no build debug. */
     private val latencyProbe = DebugLatency.createProbe(context, "surdocego")
+
+    /** Registro de eventos dos testes técnicos (C4). Só no build debug; no release não faz nada. */
+    private val events = DebugEvents.create(context, "surdocego")
+
+    /** Pontos marcados no formato "1-2-5" (para o registro de eventos). */
+    private fun markedPoints(): String =
+        points.indices.filter { points[it] }.joinToString("-") { (it + 1).toString() }.ifEmpty { "nenhum" }
 
     /** Nome padrão deste celular para o Comunicador: "Celular tátil (modelo)". */
     val defaultName = "${NearbyConnectionService.DEFAULT_DISCOVERY_NAME} (${Build.MODEL.take(18)})"
@@ -281,6 +289,7 @@ internal class DeafblindSession(
     }
 
     fun setActive(isActive: Boolean) {
+        events.log(if (isActive) "MODO_ATIVO" else "MODO_INATIVO")
         active = isActive
         if (isActive) {
             if (permitted && nearby.getCurrentState() == ConnectionState.DISCONNECTED) nearby.startDiscovery(localName)
@@ -297,18 +306,21 @@ internal class DeafblindSession(
     // ───────── Cela Braille e comandos ─────────
 
     fun togglePoint(index: Int) {
-        if (!canCompose) { rejectNoMessage(); return }
+        if (!canCompose) { rejectNoMessage("ponto"); return }
         points[index] = !points[index]
+        events.log("PONTO", detalhe = "ponto=${index + 1};marcado=${points[index]};pontos=${markedPoints()}")
         feedback(if (points[index]) SystemFeedbackEvent.DOT_ON else SystemFeedbackEvent.DOT_OFF)
     }
 
     /** Toque na área de gestos: transforma os pontos marcados em letra. */
     fun confirmLetter() {
         if (isPlaying) { stopPlayback(); return }
-        if (!canCompose) { rejectNoMessage(); return }
+        if (!canCompose) { rejectNoMessage("confirmar"); return }
         enterComposing()
+        val marked = markedPoints()
         val letter = BrailleMapper.reverseMap(points.toList())
-        if (letter != null && messageBuilder.appendCharacter(letter)) {
+        val accepted = letter != null && messageBuilder.appendCharacter(letter)
+        if (accepted) {
             feedback(SystemFeedbackEvent.COMMAND_RECOGNIZED)
             echo = CommandEcho("Letra $letter", ok = true)
         } else {
@@ -317,12 +329,21 @@ internal class DeafblindSession(
         }
         clearPoints()
         composed = messageBuilder.currentText
+        events.log(
+            when {
+                accepted -> "LETRA_CONFIRMADA"
+                letter == null -> "COMBINACAO_INVALIDA"
+                else -> "LIMITE_LETRAS"
+            },
+            detalhe = "pontos=$marked;letra=${letter ?: "-"};texto=$composed",
+        )
     }
 
     /** Deslizar para a esquerda. */
     fun deleteLast() {
-        if (!canCompose) { rejectNoMessage(); return }
-        if (messageBuilder.deleteLastCharacter()) {
+        if (!canCompose) { rejectNoMessage("apagar"); return }
+        val deleted = messageBuilder.deleteLastCharacter()
+        if (deleted) {
             feedback(SystemFeedbackEvent.COMMAND_RECOGNIZED)
             echo = CommandEcho("Apagou", ok = true)
         } else {
@@ -330,13 +351,15 @@ internal class DeafblindSession(
             echo = CommandEcho("Nada para apagar", ok = false)
         }
         composed = messageBuilder.currentText
+        events.log(if (deleted) "APAGAR" else "APAGAR_VAZIO", detalhe = "texto=$composed")
     }
 
     /** Deslizar para a direita. */
     fun addSpace() {
-        if (!canCompose) { rejectNoMessage(); return }
+        if (!canCompose) { rejectNoMessage("espaco"); return }
         enterComposing()
-        if (messageBuilder.appendSpace()) {
+        val added = messageBuilder.appendSpace()
+        if (added) {
             feedback(SystemFeedbackEvent.COMMAND_RECOGNIZED)
             echo = CommandEcho("Espaço", ok = true)
         } else {
@@ -344,13 +367,15 @@ internal class DeafblindSession(
             echo = CommandEcho("Limite de letras", ok = false)
         }
         composed = messageBuilder.currentText
+        events.log(if (added) "ESPACO" else "LIMITE_LETRAS", detalhe = "texto=$composed")
     }
 
     /** Deslizar para cima: envia a resposta. */
     fun send() {
-        if (!canCompose) { rejectNoMessage(); return }
+        if (!canCompose) { rejectNoMessage("enviar"); return }
         val text = messageBuilder.currentText.trim()
         if (text.isEmpty()) {
+            events.log("RESPOSTA_VAZIA")
             feedback(SystemFeedbackEvent.ERROR)
             echo = CommandEcho("Resposta vazia", ok = false)
             return
@@ -359,6 +384,7 @@ internal class DeafblindSession(
         modeStateMachine.transitionTo(DeafblindModeState.SENDING_MESSAGE)
         val replyId = UUID.randomUUID().toString()
         nearby.sendMessage(WireProtocol.encode(WireMessage.Text(replyId, text)))
+        events.log("RESPOSTA_ENVIADA", replyId, "tam=${BrailleTextNormalizer.normalizeForBraille(text).length};texto=$text")
         // DELIVERED: o Nearby entregou ao comunicador (SENT viraria "falhou" ao reabrir o histórico).
         record(Message(replyId, text, UserMode.DEAFBLIND, System.currentTimeMillis(), MessageStatus.DELIVERED))
         feedback(SystemFeedbackEvent.MESSAGE_SENT)
@@ -374,10 +400,12 @@ internal class DeafblindSession(
     fun repeatLast() {
         val text = message
         if (text == null || connectionState != ConnectionState.CONNECTED) {
+            events.log("REPETIR_RECUSADO", detalhe = "conexao=$connectionState")
             feedback(SystemFeedbackEvent.ERROR)
             echo = CommandEcho("Nada para repetir", ok = false)
             return
         }
+        events.log("REPETIR", lastReceivedId, "durante_vibracao=$isPlaying")
         val state = modeStateMachine.currentState
         if (state == DeafblindModeState.WAITING_MESSAGE || state == DeafblindModeState.RECEIVING_MESSAGE) {
             modeStateMachine.transitionTo(DeafblindModeState.REPEATING_MESSAGE)
@@ -389,16 +417,15 @@ internal class DeafblindSession(
     }
 
     /** Gesto antes da primeira mensagem (ou durante a vibração): vibra "erro" para a pessoa não ficar sem resposta. */
-    private fun rejectNoMessage() {
+    private fun rejectNoMessage(gesto: String) {
+        val motivo = when {
+            connectionState != ConnectionState.CONNECTED -> "Sem conexão"
+            isPlaying -> "Espere a vibração"
+            else -> "Aguarde uma mensagem"
+        }
+        events.log("GESTO_RECUSADO", detalhe = "gesto=$gesto;motivo=$motivo")
         feedback(SystemFeedbackEvent.ERROR)
-        echo = CommandEcho(
-            when {
-                connectionState != ConnectionState.CONNECTED -> "Sem conexão"
-                isPlaying -> "Espere a vibração"
-                else -> "Aguarde uma mensagem"
-            },
-            ok = false,
-        )
+        echo = CommandEcho(motivo, ok = false)
     }
 
     /** Leva a máquina de estados até "compondo", também na segunda resposta em diante. */
@@ -421,6 +448,7 @@ internal class DeafblindSession(
      * Durante uma mensagem não interrompe a leitura: guarda e vibra assim que ela terminar.
      */
     fun onScreenFlipped(upsideDown: Boolean) {
+        events.log("TELA_GIRADA", detalhe = "ponta_cabeca=$upsideDown")
         if (isPlaying) pendingFlip = upsideDown else flipFeedback(upsideDown)
     }
 
@@ -441,7 +469,11 @@ internal class DeafblindSession(
     private fun feedback(event: SystemFeedbackEvent) {
         // Uma vibração nova substitui a que está tocando: durante uma mensagem, nenhum aviso
         // (toque sem querer num ponto, mudança de conexão) pode cortar a leitura.
-        if (isPlaying) return
+        if (isPlaying) {
+            events.log("AVISO_SUPRIMIDO", detalhe = "evento=$event")
+            return
+        }
+        events.log("AVISO_VIBRADO", detalhe = "evento=$event")
         playback.playSystemFeedback(SystemHapticPatterns.getPulsesFor(event))
     }
 
@@ -452,6 +484,7 @@ internal class DeafblindSession(
         if (normalized.isEmpty()) return
         // Início de T1: instante em que o payload chegou (gravado pelo NearbyConnectionService).
         latencyProbe.textArrived(wire.id, normalized.length, nearby.lastPayloadAtNanos)
+        events.log("MSG_RECEBIDA", wire.id, "tam=${normalized.length};texto=${wire.text}")
         message = normalized
         lastReceivedId = wire.id
         if (modeStateMachine.currentState == DeafblindModeState.WAITING_MESSAGE) {
@@ -473,11 +506,13 @@ internal class DeafblindSession(
         if (timeline == null) {
             // Texto que não dá para vibrar: avisa o Comunicador para ele não ficar parado em "Recebida".
             if (id.isNotEmpty()) nearby.sendMessage(WireProtocol.encode(WireMessage.Played(id)))
+            events.log("VIBRACAO_IMPOSSIVEL", id)
             return
         }
 
         playback.play(text)
         isPlaying = true
+        events.log("VIBRACAO_INICIO", id, "duracao_prevista_ms=${HapticWaveformTuner.scaleTime(timeline.totalMs, settings.tuning)}")
         val start = SystemClock.uptimeMillis()
         // Os tempos acompanham a velocidade escolhida nos Ajustes (lenta/normal/rápida).
         val tuning = settings.tuning
@@ -490,6 +525,7 @@ internal class DeafblindSession(
         handler.postAtTime({
             isPlaying = false
             playingIndex = -1
+            events.log("VIBRACAO_FIM", id)
             if (id.isNotEmpty()) nearby.sendMessage(WireProtocol.encode(WireMessage.Played(id)))
             playPendingFlip()
         }, PROGRESS_TOKEN, start + HapticWaveformTuner.scaleTime(timeline.totalMs, tuning))
@@ -501,6 +537,7 @@ internal class DeafblindSession(
         playback.stop()
         isPlaying = false
         playingIndex = -1
+        events.log("VIBRACAO_INTERROMPIDA", lastReceivedId)
         if (lastReceivedId.isNotEmpty()) nearby.sendMessage(WireProtocol.encode(WireMessage.Played(lastReceivedId)))
         echo = CommandEcho("Vibração interrompida", ok = true)
         playPendingFlip()
@@ -537,6 +574,7 @@ internal class DeafblindSession(
     override fun onConnectionStatusChanged(status: String) = Unit
 
     override fun onConnectionStateChanged(state: ConnectionState) {
+        events.log("CONEXAO", detalhe = "estado=$state" + (nearby.getConnectedEndpointName()?.let { ";par=$it" } ?: ""))
         connectionState = state
         when (state) {
             ConnectionState.CONNECTED -> {

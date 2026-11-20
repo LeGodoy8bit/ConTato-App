@@ -1,0 +1,22 @@
+﻿n;hora;pontos;vibrou_erro;texto_antes;texto_depois;texto_inalterado
+1;23:51:04.827;nenhum;Sim;;;Sim
+2;23:52:28.795;nenhum;Sim;OI;OI;Sim
+3;23:56:16.094;nenhum;Sim;ME LIGUE;ME LIGUE;Sim
+4;08:45:35.589;nenhum;Sim;;;Sim
+5;08:50:15.564;nenhum;Sim;;;Sim
+6;20:28:41.218;2;Sim;;;Sim
+7;20:28:45.820;3;Sim;;;Sim
+8;20:28:47.996;6;Sim;;;Sim
+9;20:28:50.876;2-5;Sim;;;Sim
+10;20:28:53.915;3-6;Sim;;;Sim
+11;20:28:58.369;4-6;Sim;;;Sim
+12;20:28:59.955;5-6;Sim;;;Sim
+13;20:29:04.364;4-5-6;Sim;;;Sim
+14;20:29:07.969;3-4-5-6;Sim;;;Sim
+15;20:48:14.717;nenhum;Sim;;;Sim
+16;20:48:14.848;nenhum;Sim;;;Sim
+17;20:48:15.010;nenhum;Sim;;;Sim
+18;20:48:15.048;nenhum;Sim;;;Sim
+19;20:48:15.077;nenhum;Sim;;;Sim
+20;21:17:31.231;5;Sim;;;Sim
+21;22:49:22.704;nenhum;Sim;;;Sim
