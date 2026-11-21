@@ -6,6 +6,7 @@ Trabalho de Conclusão de Curso de Ciência da Computação da Universidade Paul
 
 > **Protótipo acadêmico.** O algoritmo e o aplicativo foram verificados por testes técnicos, mas ainda **não foram avaliados com pessoas com surdocegueira**. O protocolo dessa avaliação foi submetido ao Comitê de Ética em Pesquisa e está descrito no TCC. Não use o ConTato como único meio de comunicação em situações de risco ou emergência.
 
+
 ## Como funciona
 
 - **Dois celulares, um para cada pessoa.** O modo **Comunicador** é um chat comum. O modo **Surdocego** recebe as mensagens por vibração e envia respostas pela célula Braille.
@@ -13,6 +14,10 @@ Trabalho de Conclusão de Curso de Ciência da Computação da Universidade Paul
 - **Resposta pelo toque.** A tela do modo Surdocego tem seis áreas de toque (pontos 1-2-3 à esquerda, 4-5-6 à direita) e uma área de gestos: toque confirma a letra, ← apaga, → insere espaço, ↑ envia e ↓ repete a última mensagem.
 - **Sem internet.** Os aparelhos se conectam diretamente pela Nearby Connections (Bluetooth e Wi-Fi). A internet só é usada, de forma opcional, para login com Google e backup das conversas no Firebase.
 - **Simplificação por IA (opcional).** Um modelo de linguagem pequeno, executado no próprio celular do Comunicador, sugere versões mais curtas das mensagens. Nada é enviado sem que o Comunicador toque em "Usar".
+
+## Cartilha de uso
+A cartilha com o funcionamento do app e a codificação Braille está em [Cartilha ConTato.pdf](Cartilha%20ConTato.pdf).
+
 
 ## Instalar o aplicativo pronto (APK)
 
